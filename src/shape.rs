@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, f32::consts::PI};
 
 use itertools::Itertools;
 
@@ -22,6 +22,90 @@ pub struct Shape {
     pub(crate) cell_verts: Vec<Vec<usize>>,
 }
 
+impl Shape {
+    /// Returns the number of cells in this `Shape`
+    pub fn num_cells(&self) -> usize {
+        self.cell_verts.len()
+    }
+
+    /// Returns the number of groups which are shared between two cells
+    pub(crate) fn num_groups_shared_between(&self, cell_idx1: usize, cell_idx2: usize) -> usize {
+        self.groups
+            .iter()
+            .filter(|cells| cells.contains(&cell_idx1) && cells.contains(&cell_idx2))
+            .count()
+    }
+
+    /// Generate the [`Edge`]s which appear in this `Shape`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if more than two cells are adjacent to any [`Edge`]
+    pub(crate) fn edges(&self) -> Vec<Edge> {
+        // This maps (vert_idx_bottom, vert_idx_top) pairs to the Edges that they correspond to.
+        // This allows the 2nd adjacent cell to figure out which edges it joins together
+        let mut edges = HashMap::<(usize, usize), Edge>::new();
+
+        for (cell_idx, verts) in self.cell_verts.iter().enumerate() {
+            // Iterate over the edges of this cell in clockwise order (i.e. with this cell on the
+            // **right** side of each edge).
+            for (&vert_idx_bottom, &vert_idx_top) in verts.iter().circular_tuple_windows() {
+                // Check if the reverse of this edge has already been added
+                if let Some(existing_edge) = edges.get_mut(&(vert_idx_top, vert_idx_bottom)) {
+                    // Sanity check that this isn't the 3rd face being attached to this edge
+                    assert!(existing_edge.cell_idx_left.is_none());
+                    existing_edge.cell_idx_left = Some(cell_idx);
+                    continue;
+                }
+                // If the reversed version of this edge hasn't been found, check that we haven't
+                // seen this forward edge before (which would result in an unprintable sudoku)
+                assert!(!edges.contains_key(&(vert_idx_bottom, vert_idx_top)));
+                // If this edge is new, then add it to the set with this cell as its right face
+                edges.insert(
+                    (vert_idx_bottom, vert_idx_top),
+                    Edge {
+                        vert_idx_bottom,
+                        vert_idx_top,
+                        cell_idx_left: None,
+                        cell_idx_right: cell_idx,
+                    },
+                );
+            }
+        }
+
+        edges.into_iter().map(|(_k, v)| v).collect_vec()
+    }
+
+    /// Returns the bounding box of this `Shape` as a (min, max) pair of vectors
+    pub(crate) fn bbox(&self) -> Option<(V2, V2)> {
+        // If the shape has no vertices, then the bounding box isn't defined
+        if self.verts.is_empty() {
+            return None;
+        }
+
+        let mut min_x = f32::MAX;
+        let mut min_y = f32::MAX;
+        let mut max_x = f32::MIN;
+        let mut max_y = f32::MIN;
+        for v in &self.verts {
+            if v.x < min_x {
+                min_x = v.x;
+            }
+            if v.y < min_y {
+                min_y = v.y;
+            }
+            if v.x > max_x {
+                max_x = v.x;
+            }
+            if v.y > max_y {
+                max_y = v.y;
+            }
+        }
+        Some((V2::new(min_x, min_y), V2::new(max_x, max_y)))
+    }
+}
+
+/// Constructors
 impl Shape {
     /// Creates the classic 9x9 sudoku grid that we know and love.
     pub fn classic() -> Shape {
@@ -117,80 +201,138 @@ impl Shape {
         }
     }
 
-    /// Returns the number of groups which are shared between two cells
-    pub(crate) fn num_groups_shared_between(&self, cell_idx1: usize, cell_idx2: usize) -> usize {
-        self.groups
-            .iter()
-            .filter(|cells| cells.contains(&cell_idx1) && cells.contains(&cell_idx2))
-            .count()
-    }
+    /// Create a star with a 2x2 diamond-shaped box under each point
+    pub fn star2x2(num_points: usize, base_angle: f32) -> Shape {
+        // The star is always made of 2x2 boxes
+        let box_width = 2usize;
+        // There will always be a vertical spoke going upwards (i.e. in the -Y direction) from
+        // the centre (which is referred to with index 0), and the box to the right of this is
+        // likewise referred to with index 0.  Numbers are increased when going **clockwise**
+        let spoke_directions = (0..num_points)
+            .map(|spoke_num| {
+                let mut angle = 2.0 * PI * spoke_num as f32 / num_points as f32;
+                angle += base_angle;
+                V2::new(f32::sin(angle), -f32::cos(angle))
+            })
+            .collect_vec();
 
-    /// Generate the [`Edge`]s which appear in this `Shape`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if more than two cells are adjacent to any [`Edge`]
-    pub(crate) fn edges(&self) -> Vec<Edge> {
-        // This maps (vert_idx_bottom, vert_idx_top) pairs to the Edges that they correspond to.
-        // This allows the 2nd adjacent cell to figure out which edges it joins together
-        let mut edges = HashMap::<(usize, usize), Edge>::new();
+        /* VERTICES */
 
-        for (cell_idx, verts) in self.cell_verts.iter().enumerate() {
-            // Iterate over the edges of this cell in clockwise order (i.e. with this cell on the
-            // **right** side of each edge).
-            for (&vert_idx_bottom, &vert_idx_top) in verts.iter().circular_tuple_windows() {
-                // Check if the reverse of this edge has already been added
-                if let Some(existing_edge) = edges.get_mut(&(vert_idx_top, vert_idx_bottom)) {
-                    // Sanity check that this isn't the 3rd face being attached to this edge
-                    assert!(existing_edge.cell_idx_left.is_none());
-                    existing_edge.cell_idx_left = Some(cell_idx);
-                    continue;
+        // Create the vertices in 3 stages (centre, 'spokes' between faces, verts in one face),
+        // keeping separate maps for each of them (except the centre, which is the vertex at index
+        // 0).
+        let mut verts = Vec::<V2>::new();
+        // Add the centre at index 0
+        verts.push(V2::new(0.0, 0.0));
+        // Add the spokes.  The HashMap maps (spoke_idx, distance from centre) to the vertex index
+        // in that location
+        let mut spoke_vert_idxs = HashMap::<(usize, usize), usize>::new();
+        for (spoke_idx, spoke_dir) in spoke_directions.iter().enumerate() {
+            for spoke_dist in 1..=box_width {
+                spoke_vert_idxs.insert((spoke_idx, spoke_dist), verts.len());
+                verts.push(spoke_dir * spoke_dist as f32);
+            }
+        }
+        // Add the verts inside each face.  The HashMap maps (box_idx, dist_in_left_spoke,
+        // dist_in_right_spoke) to the vertex index at that location (left/right according to
+        // someone standing at the centre and looking out)
+        let mut sub_face_verts_idxs = HashMap::<(usize, usize, usize), usize>::new();
+        for (box_idx, (left_spoke, right_spoke)) in
+            spoke_directions.iter().circular_tuple_windows().enumerate()
+        {
+            for left_dist in 1..=box_width {
+                for right_dist in 1..=box_width {
+                    sub_face_verts_idxs.insert((box_idx, left_dist, right_dist), verts.len());
+                    verts.push(left_spoke * left_dist as f32 + right_spoke * right_dist as f32);
                 }
-                // If the reversed version of this edge hasn't been found, check that we haven't
-                // seen this forward edge before (which would result in an unprintable sudoku)
-                assert!(!edges.contains_key(&(vert_idx_bottom, vert_idx_top)));
-                // If this edge is new, then add it to the set with this cell as its right face
-                edges.insert(
-                    (vert_idx_bottom, vert_idx_top),
-                    Edge {
-                        vert_idx_bottom,
-                        vert_idx_top,
-                        cell_idx_left: None,
-                        cell_idx_right: cell_idx,
-                    },
+            }
+        }
+
+        /* CELLS */
+
+        // Helper function to fetch the index of a vertex given its coordinates within a box
+        let vert_idx = |box_idx: usize, left_spoke_dist: usize, right_spoke_dist: usize| {
+            match (left_spoke_dist, right_spoke_dist) {
+                // If both distances are 0, then this coordinate refers to the centre
+                (0, 0) => 0,
+                // If just the right spoke dist is 0, then this coordinate is on the left spoke
+                // (i.e. the one who's idx the same as the box's)
+                (l, 0) => *spoke_vert_idxs.get(&(box_idx, l)).unwrap(),
+                // If just the left spoke dist is 0, then this coordinate is on the right spoke
+                // (i.e. the one who's idx is equal to the box's idx plus 1 - wrapping back to 0 if
+                // needed).
+                (0, r) => *spoke_vert_idxs
+                    .get(&((box_idx + 1) % num_points, r))
+                    .unwrap(),
+                // If neither distance is 0 then the vertex is not on a spoke and we should look it
+                // up in the faces table
+                (l, r) => *sub_face_verts_idxs.get(&(box_idx, l, r)).unwrap(),
+            }
+        };
+
+        let mut cell_verts = Vec::<Vec<usize>>::new();
+        for box_idx in 0..num_points {
+            for left_spoke_dist in 0..box_width {
+                for right_spoke_dist in 0..box_width {
+                    cell_verts.push(vec![
+                        // Push the vertices, going anti-clockwise, starting from the vertex
+                        // nearest the centre
+                        vert_idx(box_idx, left_spoke_dist + 0, right_spoke_dist + 0),
+                        vert_idx(box_idx, left_spoke_dist + 1, right_spoke_dist + 0),
+                        vert_idx(box_idx, left_spoke_dist + 1, right_spoke_dist + 1),
+                        vert_idx(box_idx, left_spoke_dist + 0, right_spoke_dist + 1),
+                    ]);
+                }
+            }
+        }
+
+        /* GROUPS */
+
+        // Helper function to get the index of a cell given its location
+        let cell_idx = |box_idx: usize, left_coord: usize, right_coord: usize| {
+            // Note how the terms in this equation follow the same order as the loops used to
+            // generate the cells
+            (box_idx * box_width * box_width) + (left_coord * box_width) + right_coord
+        };
+
+        let mut groups = Vec::<Vec<usize>>::new();
+        // Rows/columns.  These start following the left spoke of the first box, then move to
+        // following the right spoke of the 2nd box (left/right are again the directions seen from
+        // the centre of the star looking out)
+        for (left_box_idx, right_box_idx) in (0..num_points).circular_tuple_windows() {
+            for dist_from_centre in 0..box_width {
+                let mut group = Vec::<usize>::new();
+                // Section in left box
+                group.extend(
+                    (0..box_width)
+                        .map(|left_coord| cell_idx(left_box_idx, left_coord, dist_from_centre)),
                 );
+                // Section in right box
+                group.extend(
+                    (0..box_width)
+                        .map(|right_coord| cell_idx(right_box_idx, dist_from_centre, right_coord)),
+                );
+
+                groups.push(group);
             }
         }
-
-        edges.into_iter().map(|(_k, v)| v).collect_vec()
-    }
-
-    /// Returns the bounding box of this `Shape` as a (min, max) pair of vectors
-    pub(crate) fn bbox(&self) -> Option<(V2, V2)> {
-        // If the shape has no vertices, then the bounding box isn't defined
-        if self.verts.is_empty() {
-            return None;
+        // Boxes
+        for box_idx in 0..num_points {
+            groups.push(
+                // Because we generated the cells box-by-box, each box contains a region of
+                // consecutively indexed cells.
+                (0..box_width * box_width)
+                    .map(|i| box_idx * box_width * box_width + i)
+                    .collect_vec(),
+            );
         }
 
-        let mut min_x = f32::MAX;
-        let mut min_y = f32::MAX;
-        let mut max_x = f32::MIN;
-        let mut max_y = f32::MIN;
-        for v in &self.verts {
-            if v.x < min_x {
-                min_x = v.x;
-            }
-            if v.y < min_y {
-                min_y = v.y;
-            }
-            if v.x > max_x {
-                max_x = v.x;
-            }
-            if v.y > max_y {
-                max_y = v.y;
-            }
+        Self {
+            num_symbols: box_width * box_width,
+            groups,
+            verts,
+            cell_verts,
         }
-        Some((V2::new(min_x, min_y), V2::new(max_x, max_y)))
     }
 }
 

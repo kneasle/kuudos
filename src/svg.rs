@@ -4,19 +4,27 @@ use simple_xml_builder::XMLElement;
 
 use crate::{Shape, V2};
 
-/// Code to write sudoku grids to SVG files
-pub fn gen_svg_string(shape: &Shape, opts: &RenderingOpts, scaling: f32) -> String {
+/// Write an empty sudoku grid to an SVG string
+pub fn gen_empty_svg_string(shape: &Shape, opts: &RenderingOpts, scaling: f32) -> String {
+    gen_svg_string(shape, opts, scaling, &vec![None; shape.num_cells()])
+}
+
+/// Write a populated sudoku grid to an SVG string
+pub fn gen_svg_string(
+    shape: &Shape,
+    opts: &RenderingOpts,
+    scaling: f32,
+    assignment: &[Option<char>],
+) -> String {
     // This bounding box is in **untransformed** space
     let (bbox_min, bbox_max) = shape.bbox().expect("Shape should have at least one vertex");
     let padding_vec = V2::new(opts.padding, opts.padding);
 
+    let transform = |pt: V2| (pt - bbox_min + padding_vec) * scaling;
+
     // Transform the vertices so that their min-point is (padding, padding) and they're scaled up
     // by the `scaling` factor
-    let transformed_verts = shape
-        .verts
-        .iter()
-        .map(|&v| (v - bbox_min + padding_vec) * scaling)
-        .collect_vec();
+    let transformed_verts = shape.verts.iter().copied().map(transform).collect_vec();
     // Compute the dimensions of the resulting SVG image
     let img_dimensions = (bbox_max - bbox_min + padding_vec * 2.0) * scaling;
 
@@ -41,39 +49,75 @@ pub fn gen_svg_string(shape: &Shape, opts: &RenderingOpts, scaling: f32) -> Stri
         root.add_child(cell_elem);
     }
 
+    // Add the cell contents
+    let text_size_str = (opts.font_size * scaling).to_string();
+    for (vert_idxs, value) in shape.cell_verts.iter().zip_eq(assignment) {
+        if let Some(c) = *value {
+            let mut sum = V2::new(0.0, 0.0);
+            for idx in vert_idxs {
+                sum += shape.verts[*idx];
+            }
+            let mut untransformed_centre = sum / vert_idxs.len() as f32;
+            untransformed_centre.y += opts.font_size * opts.text_vertical_nudge;
+            let centre = transform(untransformed_centre);
+
+            let mut content_elem = XMLElement::new("text");
+            content_elem.add_attribute("x", &centre.x.to_string());
+            content_elem.add_attribute("y", &centre.y.to_string());
+            content_elem.add_attribute("font-size", &text_size_str);
+            content_elem.add_attribute("font-family", &opts.font_family);
+            content_elem.add_attribute("text-anchor", "middle");
+            content_elem.add_text(&c.to_string());
+
+            root.add_child(content_elem);
+        }
+    }
+
+    #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
+    enum EdgeType {
+        /// The edge is between two disconnected cells
+        Disconnected,
+        CellBorder,
+        BoxBorder,
+    }
+
     // Sort the edges so that all the box borders come after all the cell borders (to prevent
     // overlap issues)
     let mut edges = shape
         .edges()
         .into_iter()
         .map(|edge| {
-            let is_box_border = match edge.cell_idx_left {
+            let num_shared_groups = edge
+                .cell_idx_left
+                .map(|cell_left| shape.num_groups_shared_between(cell_left, edge.cell_idx_right));
+            let edge_type = match num_shared_groups {
+                Some(0) => EdgeType::Disconnected,
                 // If the edge sits between two faces, then it is internal and is therefore bold iff it
                 // is on the border between two boxes (i.e. is only connected by a row or column).
-                Some(cell_left) => {
-                    shape.num_groups_shared_between(cell_left, edge.cell_idx_right) == 1
-                }
+                Some(1) => EdgeType::BoxBorder,
+                // Any cell with more than two connections must be contained in a box
+                Some(_) => EdgeType::CellBorder,
                 // Edges with only one cell must be at the edge of the grid, and are therefore bold
-                None => true,
+                None => EdgeType::BoxBorder,
             };
-            (is_box_border, edge)
+            (edge_type, edge)
         })
         .collect_vec();
-    // Sort the edges by `is_box_border`, using the fact that `true` > `false`
-    edges.sort_by_key(|(is_box_border, _edge)| *is_box_border);
+    // Sort the edges by type with `Disconnected` < `CellBorder` < `BoxBorder`
+    edges.sort_by_key(|(ty, _edge)| *ty);
 
     // Add the edges
     let box_border_width_str = (opts.box_border_width * scaling).to_string();
     let cell_border_width_str = (opts.cell_border_width * scaling).to_string();
-    for (is_box_border, edge) in edges {
+    for (edge_type, edge) in edges {
         // Extract the coordinates of the top/bottom vertices of this edge
         let vert_top = transformed_verts[edge.vert_idx_top];
         let vert_bottom = transformed_verts[edge.vert_idx_bottom];
         // Determine the edge's style, based on whether or not it's a box border
-        let (color, width_str): (_, &str) = if is_box_border {
-            (opts.box_border_color, &box_border_width_str)
-        } else {
-            (opts.cell_border_color, &cell_border_width_str)
+        let (color, width_str): (_, &str) = match edge_type {
+            EdgeType::Disconnected => (opts.disconnected_edge_color, &cell_border_width_str),
+            EdgeType::CellBorder => (opts.cell_border_color, &cell_border_width_str),
+            EdgeType::BoxBorder => (opts.box_border_color, &box_border_width_str),
         };
 
         let mut edge_elem = XMLElement::new("line");
@@ -108,6 +152,19 @@ pub struct RenderingOpts {
     /// The colour of the box borders.  Defaults to black
     box_border_color: RGB8,
 
+    /// What font family should be used for populating the sudoku
+    font_family: String,
+    /// What font size should be used for the numbers written in the cells, if the cell edges have
+    /// a length of ~1 unit
+    font_size: f32,
+    /// What multiple of `font_size` is added to the y-value of the text in order to centre the
+    /// text
+    text_vertical_nudge: f32,
+
+    /// The colour of an edge between two cells which do not share any groups (this edge will be
+    /// given the width of a cell border)
+    disconnected_edge_color: RGB8,
+
     /// If the edge lengths are ~1 unit, how many units of space will be reserved round the edge of
     /// the SVG file
     padding: f32,
@@ -123,6 +180,12 @@ impl Default for RenderingOpts {
 
             box_border_width: 0.1, // edge lengths
             box_border_color: RGB8::new(0, 0, 0),
+
+            font_family: "monospace".to_owned(),
+            font_size: 0.7,            // edge lengths
+            text_vertical_nudge: 0.33, // multiples of `font_size`
+
+            disconnected_edge_color: RGB8::new(255, 0, 0),
 
             padding: 0.5, // edge lengths
         }
