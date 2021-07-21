@@ -1,8 +1,8 @@
-use itertools::Itertools;
-use vector2d::Vector2D;
+use std::collections::HashMap;
 
-/// Type alias for 2D floating point vectors (in the geometric sense, unlike [`Vec`])
-type V2 = Vector2D<f32>;
+use itertools::Itertools;
+
+use crate::V2;
 
 /// The shape of a sudoku as accepted by Kuudos
 #[derive(Debug, Clone)]
@@ -114,4 +114,62 @@ impl Shape {
             cell_verts,
         }
     }
+
+    /// Returns the number of groups which are shared between two cells
+    pub(crate) fn num_groups_shared_between(&self, cell_idx1: usize, cell_idx2: usize) -> usize {
+        self.groups
+            .iter()
+            .filter(|cells| cells.contains(&cell_idx1) && cells.contains(&cell_idx2))
+            .count()
+    }
+
+    /// Generate the [`Edge`]s which appear in this `Shape`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if more than two cells are adjacent to any [`Edge`]
+    pub(crate) fn edges(&self) -> Vec<Edge> {
+        // This maps (vert_idx_bottom, vert_idx_top) pairs to the Edges that they correspond to.
+        // This allows the 2nd adjacent cell to figure out which edges it joins together
+        let mut edges = HashMap::<(usize, usize), Edge>::new();
+
+        for (cell_idx, verts) in self.cell_verts.iter().enumerate() {
+            // Iterate over the edges of this cell in clockwise order (i.e. with this cell on the
+            // **right** side of each edge).
+            for (&vert_idx_bottom, &vert_idx_top) in verts.iter().circular_tuple_windows() {
+                // Check if the reverse of this edge has already been added
+                if let Some(existing_edge) = edges.get_mut(&(vert_idx_top, vert_idx_bottom)) {
+                    // Sanity check that this isn't the 3rd face being attached to this edge
+                    assert!(existing_edge.cell_idx_left.is_none());
+                    existing_edge.cell_idx_left = Some(cell_idx);
+                    continue;
+                }
+                // If the reversed version of this edge hasn't been found, check that we haven't
+                // seen this forward edge before (which would result in an unprintable sudoku)
+                assert!(!edges.contains_key(&(vert_idx_bottom, vert_idx_top)));
+                // If this edge is new, then add it to the set with this cell as its right face
+                edges.insert(
+                    (vert_idx_bottom, vert_idx_top),
+                    Edge {
+                        vert_idx_bottom,
+                        vert_idx_top,
+                        cell_idx_left: None,
+                        cell_idx_right: cell_idx,
+                    },
+                );
+            }
+        }
+
+        edges.into_iter().map(|(_k, v)| v).collect_vec()
+    }
+}
+
+/// An `Edge` is a line drawn on the grid between two vertices, and adjacent to either one or two
+/// cells.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Edge {
+    pub(crate) vert_idx_top: usize,
+    pub(crate) vert_idx_bottom: usize,
+    pub(crate) cell_idx_left: Option<usize>,
+    pub(crate) cell_idx_right: usize,
 }
