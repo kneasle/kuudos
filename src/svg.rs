@@ -2,14 +2,28 @@ use itertools::Itertools;
 use rgb::RGB8;
 use simple_xml_builder::XMLElement;
 
-use crate::Shape;
+use crate::{Shape, V2};
 
 /// Code to write sudoku grids to SVG files
 pub fn gen_svg_string(shape: &Shape, opts: &RenderingOpts, scaling: f32) -> String {
-    let transformed_verts = shape.verts.iter().map(|&v| v * scaling).collect_vec();
+    // This bounding box is in **untransformed** space
+    let (bbox_min, bbox_max) = shape.bbox().expect("Shape should have at least one vertex");
+    let padding_vec = V2::new(opts.padding, opts.padding);
+
+    // Transform the vertices so that their min-point is (padding, padding) and they're scaled up
+    // by the `scaling` factor
+    let transformed_verts = shape
+        .verts
+        .iter()
+        .map(|&v| (v - bbox_min + padding_vec) * scaling)
+        .collect_vec();
+    // Compute the dimensions of the resulting SVG image
+    let img_dimensions = (bbox_max - bbox_min + padding_vec * 2.0) * scaling;
 
     // Root SVG element
     let mut root = XMLElement::new("svg");
+    root.add_attribute("width", &img_dimensions.x.to_string());
+    root.add_attribute("height", &img_dimensions.y.to_string());
 
     // Add the cell backgrounds
     for vert_idxs in &shape.cell_verts {
@@ -93,6 +107,10 @@ pub struct RenderingOpts {
     box_border_width: f32,
     /// The colour of the box borders.  Defaults to black
     box_border_color: RGB8,
+
+    /// If the edge lengths are ~1 unit, how many units of space will be reserved round the edge of
+    /// the SVG file
+    padding: f32,
 }
 
 impl Default for RenderingOpts {
@@ -100,11 +118,13 @@ impl Default for RenderingOpts {
         Self {
             cell_fill_color: RGB8::new(255, 255, 255),
 
-            cell_border_width: 0.05,
+            cell_border_width: 0.05, // edge lengths
             cell_border_color: RGB8::new(1, 1, 1) * 200,
 
-            box_border_width: 0.1,
+            box_border_width: 0.1, // edge lengths
             box_border_color: RGB8::new(0, 0, 0),
+
+            padding: 0.5, // edge lengths
         }
     }
 }

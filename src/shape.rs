@@ -37,13 +37,15 @@ impl Shape {
         /* We number the cells as they would be read in a book; so a 4x4 grid would be numbered
          * (numbers are written in hex for convenience):
          *
-         *  0  1 | 2  3
-         *       |
-         *  4  5 | 6  7
-         * ------+------
-         *  8  9 | a  b
-         *       |
-         *  c  d | e  f
+         * +------+------+
+         * | 0  1 | 2  3 |
+         * |      |      |
+         * | 4  5 | 6  7 |
+         * +------+------+
+         * | 8  9 | a  b |
+         * |      |      |
+         * | c  d | e  f |
+         * +------+------+
          *
          * Vertices are also labelled that way
          */
@@ -161,6 +163,34 @@ impl Shape {
         }
 
         edges.into_iter().map(|(_k, v)| v).collect_vec()
+    }
+
+    /// Returns the bounding box of this `Shape` as a (min, max) pair of vectors
+    pub(crate) fn bbox(&self) -> Option<(V2, V2)> {
+        // If the shape has no vertices, then the bounding box isn't defined
+        if self.verts.is_empty() {
+            return None;
+        }
+
+        let mut min_x = f32::MAX;
+        let mut min_y = f32::MAX;
+        let mut max_x = f32::MIN;
+        let mut max_y = f32::MIN;
+        for v in &self.verts {
+            if v.x < min_x {
+                min_x = v.x;
+            }
+            if v.y < min_y {
+                min_y = v.y;
+            }
+            if v.x > max_x {
+                max_x = v.x;
+            }
+            if v.y > max_y {
+                max_y = v.y;
+            }
+        }
+        Some((V2::new(min_x, min_y), V2::new(max_x, max_y)))
     }
 }
 
