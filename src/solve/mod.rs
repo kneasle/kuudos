@@ -5,7 +5,11 @@ use itertools::Itertools;
 use crate::Shape;
 
 /// Solves a sudoku, returning a possible error if there are no or multiple solutions
-pub fn solve(shape: &Shape, clues: &Vec<Option<usize>>) -> Result<Vec<usize>, Error> {
+pub fn solve(
+    shape: &Shape,
+    clues: &Vec<Option<usize>>,
+    check_multiple_solns: bool,
+) -> Result<Vec<usize>, Error> {
     if shape.num_cells() != clues.len() {
         return Err(Error::ClueLenMismatch {
             clue_len: clues.len(),
@@ -24,11 +28,15 @@ pub fn solve(shape: &Shape, clues: &Vec<Option<usize>>) -> Result<Vec<usize>, Er
         .for_each(|(cell_idx, value)| partial.pen(&data, cell_idx, value));
 
     // Run recursive backtracking on this grid, and extract the solution or propagate the error
-    recursive_solve(&data, partial).map(Partial::to_solved_digits)
+    recursive_solve(&data, partial, check_multiple_solns).map(Partial::to_solved_digits)
 }
 
 /// A very naive backtracking solver, which looks for 'naked singles'
-fn recursive_solve(data: &ShapeData, mut partial: Partial) -> Result<Partial, Error> {
+fn recursive_solve(
+    data: &ShapeData,
+    mut partial: Partial,
+    check_multiple_solns: bool,
+) -> Result<Partial, Error> {
     // Repeatedly pen in 'naked singles' - i.e. a cell with only one possible digit.  These are
     // cheap to compute and don't require backtracking, so we perform them in-place on the current
     // Partial.
@@ -81,12 +89,20 @@ fn recursive_solve(data: &ShapeData, mut partial: Partial) -> Result<Partial, Er
         // Create a new `Partial` which assumes that this digit is taken
         let mut new_partial = partial.clone();
         new_partial.pen(data, min_idx, assumed_digit);
-        match recursive_solve(data, new_partial) {
-            Ok(new_solution) => match solution {
-                // If this is the 2nd solution, then this branch is unsolvable
-                Some(_) => return Err(Error::MultipleSolutions),
-                None => solution = Some(new_solution),
-            },
+        match recursive_solve(data, new_partial, check_multiple_solns) {
+            Ok(new_solution) => {
+                if check_multiple_solns {
+                    // If we are required to check for multiple solutions and this is the first
+                    // solution found, we continue the search
+                    match solution {
+                        // If this is the 2nd solution, then this branch is unsolvable
+                        Some(_) => return Err(Error::MultipleSolutions),
+                        None => solution = Some(new_solution),
+                    }
+                } else {
+                    return Ok(new_solution);
+                }
+            }
             // If the solver produced too many solutions, then this whole branch is unsolvable
             // (because the other branches can only generate more solutions)
             Err(Error::MultipleSolutions) => return Err(Error::MultipleSolutions),
