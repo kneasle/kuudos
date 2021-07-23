@@ -1,6 +1,7 @@
 use vector2d::Vector2D;
 
 mod shape;
+pub mod solve;
 pub mod svg;
 
 pub use shape::Shape;

@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
-vector2d = "2.2"
 itertools = "0.10"
-simple-xml-builder = "1.0"
 rgb = "0.8.27"
+simple-xml-builder = "1.0"
+vector2d = "2.2"
