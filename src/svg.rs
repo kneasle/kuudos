@@ -92,8 +92,9 @@ pub fn gen_svg_string(
                 .map(|cell_left| shape.num_groups_shared_between(cell_left, edge.cell_idx_right));
             let edge_type = match num_shared_groups {
                 Some(0) => EdgeType::Disconnected,
-                // If the edge sits between two faces, then it is internal and is therefore bold iff it
-                // is on the border between two boxes (i.e. is only connected by a row or column).
+                // If the edge sits between two cells, then it is internal and is therefore bold
+                // iff it is on the border between two boxes (i.e. is only connected by a row or
+                // column).
                 Some(1) => EdgeType::BoxBorder,
                 // Any cell with more than two connections must be contained in a box
                 Some(_) => EdgeType::CellBorder,

@@ -5,7 +5,7 @@ use kuudos::{
     Shape,
 };
 
-const VALUE_NAMES: &'static str = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+const VALUE_NAMES: &str = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
 fn main() {
     let (shape, clues) = if true {

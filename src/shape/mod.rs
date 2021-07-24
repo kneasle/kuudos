@@ -4,6 +4,8 @@ use itertools::Itertools;
 
 use crate::V2;
 
+pub(crate) mod builder;
+
 /// The shape of a sudoku as accepted by Kuudos
 #[derive(Debug, Clone)]
 pub struct Shape {
@@ -16,7 +18,7 @@ pub struct Shape {
     /* DISPLAY DATA */
     /// The 2D coordinates of the vertices of this shape
     pub(crate) verts: Vec<V2>,
-    /// Each face is a list of indices of vertices **in clockwise order**.  These will almost
+    /// Each cell is a list of indices of vertices **in clockwise order**.  These will almost
     /// certainly have 4 vertices (and therefore sides), but leaving this generic allows Kuudos to
     /// handle other Sudoku shapes, such as those with hexagonal cells
     pub(crate) cell_verts: Vec<Vec<usize>>,
@@ -52,7 +54,7 @@ impl Shape {
             for (&vert_idx_bottom, &vert_idx_top) in verts.iter().circular_tuple_windows() {
                 // Check if the reverse of this edge has already been added
                 if let Some(existing_edge) = edges.get_mut(&(vert_idx_top, vert_idx_bottom)) {
-                    // Sanity check that this isn't the 3rd face being attached to this edge
+                    // Sanity check that this isn't the 3rd cell being attached to this edge
                     assert!(existing_edge.cell_idx_left.is_none());
                     existing_edge.cell_idx_left = Some(cell_idx);
                     continue;
@@ -60,7 +62,7 @@ impl Shape {
                 // If the reversed version of this edge hasn't been found, check that we haven't
                 // seen this forward edge before (which would result in an unprintable sudoku)
                 assert!(!edges.contains_key(&(vert_idx_bottom, vert_idx_top)));
-                // If this edge is new, then add it to the set with this cell as its right face
+                // If this edge is new, then add it to the set with this cell as its right cell
                 edges.insert(
                     (vert_idx_bottom, vert_idx_top),
                     Edge {
@@ -201,7 +203,9 @@ impl Shape {
         }
     }
 
-    /// Create a star with a 2x2 diamond-shaped box under each point
+    /// Create a star with a 2x2 diamond-shaped box under each point.  `Shape::star2x2(4, 0)` is
+    /// equivalent to `Shape::square(2, 2)`.
+    #[allow(clippy::identity_op)]
     pub fn star2x2(num_points: usize, base_angle: f32) -> Shape {
         // The star is always made of 2x2 boxes
         let box_width = 2usize;
@@ -218,12 +222,11 @@ impl Shape {
 
         /* VERTICES */
 
-        // Create the vertices in 3 stages (centre, 'spokes' between faces, verts in one face),
+        // Create the vertices in 3 stages (centre, 'spokes' between boxes, verts in one box),
         // keeping separate maps for each of them (except the centre, which is the vertex at index
         // 0).
-        let mut verts = Vec::<V2>::new();
-        // Add the centre at index 0
-        verts.push(V2::new(0.0, 0.0));
+        let mut verts = vec![V2::new(0.0, 0.0)]; // The centre of the star is at index 0
+
         // Add the spokes.  The HashMap maps (spoke_idx, distance from centre) to the vertex index
         // in that location
         let mut spoke_vert_idxs = HashMap::<(usize, usize), usize>::new();
@@ -233,16 +236,16 @@ impl Shape {
                 verts.push(spoke_dir * spoke_dist as f32);
             }
         }
-        // Add the verts inside each face.  The HashMap maps (box_idx, dist_in_left_spoke,
+        // Add the verts inside each box.  The HashMap maps (box_idx, dist_in_left_spoke,
         // dist_in_right_spoke) to the vertex index at that location (left/right according to
         // someone standing at the centre and looking out)
-        let mut sub_face_verts_idxs = HashMap::<(usize, usize, usize), usize>::new();
+        let mut sub_box_verts_idxs = HashMap::<(usize, usize, usize), usize>::new();
         for (box_idx, (left_spoke, right_spoke)) in
             spoke_directions.iter().circular_tuple_windows().enumerate()
         {
             for left_dist in 1..=box_width {
                 for right_dist in 1..=box_width {
-                    sub_face_verts_idxs.insert((box_idx, left_dist, right_dist), verts.len());
+                    sub_box_verts_idxs.insert((box_idx, left_dist, right_dist), verts.len());
                     verts.push(left_spoke * left_dist as f32 + right_spoke * right_dist as f32);
                 }
             }
@@ -265,8 +268,8 @@ impl Shape {
                     .get(&((box_idx + 1) % num_points, r))
                     .unwrap(),
                 // If neither distance is 0 then the vertex is not on a spoke and we should look it
-                // up in the faces table
-                (l, r) => *sub_face_verts_idxs.get(&(box_idx, l, r)).unwrap(),
+                // up in the boxes table
+                (l, r) => *sub_box_verts_idxs.get(&(box_idx, l, r)).unwrap(),
             }
         };
 
@@ -344,4 +347,26 @@ pub struct Edge {
     pub(crate) vert_idx_bottom: usize,
     pub(crate) cell_idx_left: Option<usize>,
     pub(crate) cell_idx_right: usize,
+}
+
+/// A grouping of cells of a [`Shape`] into equivalence classes which determine the symmetry of the
+/// clues in the resulting puzzle (i.e. in a puzzle grid with this `Symmetry`, all the cells in the
+/// same equivalence class must either be all clues or all blanks).
+#[derive(Debug, Clone)]
+pub struct Symmetry {
+    /// For each cell, this maps to an equivalence class index from `0..self.num_equiv_classes`
+    cell_equiv_classes: Vec<usize>,
+    /// How many unique equivalence classes this `Symmetry` contains
+    num_equiv_classes: usize,
+}
+
+impl Symmetry {
+    /// A `Symmetry` which enforces no symmetry on a given [`Shape`] (i.e. each cell is in its own
+    /// equivalence class).
+    pub fn asymmetric(shape: &Shape) -> Self {
+        Self {
+            cell_equiv_classes: (0..shape.num_cells()).collect_vec(),
+            num_equiv_classes: shape.num_cells(),
+        }
+    }
 }

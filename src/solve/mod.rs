@@ -7,7 +7,7 @@ use crate::Shape;
 /// Solves a sudoku, returning a possible error if there are no or multiple solutions
 pub fn solve(
     shape: &Shape,
-    clues: &Vec<Option<usize>>,
+    clues: &[Option<usize>],
     check_multiple_solns: bool,
 ) -> Result<Vec<usize>, Error> {
     if shape.num_cells() != clues.len() {
@@ -28,7 +28,7 @@ pub fn solve(
         .for_each(|(cell_idx, value)| partial.pen(&data, cell_idx, value));
 
     // Run recursive backtracking on this grid, and extract the solution or propagate the error
-    recursive_solve(&data, partial, check_multiple_solns).map(Partial::to_solved_digits)
+    recursive_solve(&data, partial, check_multiple_solns).map(Partial::into_solved_digits)
 }
 
 /// A very naive backtracking solver, which looks for 'naked singles'
@@ -228,7 +228,7 @@ impl Partial {
     /// # Panics
     ///
     /// Panics if `self.is_solved()` is `false`
-    fn to_solved_digits(self) -> Vec<usize> {
+    fn into_solved_digits(self) -> Vec<usize> {
         self.penned_cells
             .into_iter()
             .map(|v| v.expect("`recursive_solve` returned an unsolved grid"))
