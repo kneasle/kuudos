@@ -4,8 +4,6 @@ use itertools::Itertools;
 
 use crate::V2;
 
-pub(crate) mod builder;
-
 /// The shape of a sudoku as accepted by Kuudos
 #[derive(Debug, Clone)]
 pub struct Shape {
