@@ -1,29 +1,20 @@
+use std::f32::consts::PI;
+
 use itertools::Itertools;
 use kuudos::{
     solve::{clues_from_str, solve},
     svg::{gen_svg_string, RenderingOpts},
-    Builder, Shape, V2,
+    Shape,
 };
 
 const VALUE_NAMES: &str = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
 fn main() {
     let (shape, clues) = if true {
-        // let s = Shape::star2x2(5, std::f32::consts::PI);
+        let s = Shape::star2x2(5, PI);
 
-        /* Build the star manually */
-
-        // Create a new builder with 5-way rotational symmetry
-        let mut builder = Builder::new(2, 2, 5);
-        // Create a new parallelogram box for the star's point
-        let down = V2::new(0.0, -1.0);
-        let rotated_down = builder.rotate_by_steps(down, 1);
-        builder.add_box_parallelogram(V2::new(0.0, 0.0), down, rotated_down);
-        // Build the shape
-        let (shape, _symmetry) = builder.build().unwrap();
-
-        let clues = vec![None; shape.num_cells()];
-        (shape, clues)
+        let clues = vec![None; s.num_cells()];
+        (s, clues)
     } else {
         let s = Shape::classic();
         let clues = clues_from_str(

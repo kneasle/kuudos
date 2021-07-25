@@ -67,10 +67,10 @@ impl Builder {
         // For each symmetry element
         for i in 0..self.rotational_symmetry_factor as isize {
             let new_box = [
-                self.get_vert_at(self.rotate_by_steps(unrotated_bl, i)),
-                self.get_vert_at(self.rotate_by_steps(unrotated_tl, i)),
-                self.get_vert_at(self.rotate_by_steps(unrotated_tr, i)),
-                self.get_vert_at(self.rotate_by_steps(unrotated_br, i)),
+                self.get_vert_at(self.rotate_point_by_steps(unrotated_bl, i)),
+                self.get_vert_at(self.rotate_point_by_steps(unrotated_tl, i)),
+                self.get_vert_at(self.rotate_point_by_steps(unrotated_tr, i)),
+                self.get_vert_at(self.rotate_point_by_steps(unrotated_br, i)),
             ];
             self.boxes.push(new_box);
         }
@@ -108,7 +108,7 @@ impl Builder {
         let equiv_class = self.fresh_equiv_class();
         for i in 0..self.rotational_symmetry_factor {
             self.verts.push(Vert {
-                position: self.rotate_by_steps(new_pos, i as isize),
+                position: self.rotate_point_by_steps(new_pos, i as isize),
                 equiv_class: VertEquivClass::NonCentre {
                     equiv_class,
                     equiv_rotation: i,
@@ -123,6 +123,17 @@ impl Builder {
         let class = self.next_equiv_class;
         self.next_equiv_class += 1;
         class
+    }
+
+    /* Modifiers (i.e. functions which mutate the existing shape) */
+
+    /// Rotates the whole shape around the origin (i.e. the centre of symmetry) by some angle in
+    /// radians
+    pub fn rotate(&mut self, angle: f32) {
+        // Rotate all the vertices in-place
+        for vert in &mut self.verts {
+            vert.position = rotate_vec(vert.position, angle);
+        }
     }
 
     /* Setters */
@@ -141,7 +152,7 @@ impl Builder {
     /* Helpers */
 
     /// Rotate a point by some number of rotation steps
-    pub fn rotate_by_steps(&self, v: V2, num_factors: isize) -> V2 {
+    pub fn rotate_point_by_steps(&self, v: V2, num_factors: isize) -> V2 {
         let angle = PI * 2.0 * num_factors as f32 / self.rotational_symmetry_factor as f32;
         rotate_vec(v, angle)
     }

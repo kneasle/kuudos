@@ -1,8 +1,8 @@
-use std::{collections::HashMap, f32::consts::PI};
+use std::collections::HashMap;
 
 use itertools::Itertools;
 
-use crate::V2;
+use crate::{Builder, V2};
 
 /// The shape of a sudoku as accepted by Kuudos
 #[derive(Debug, Clone)]
@@ -203,137 +203,18 @@ impl Shape {
 
     /// Create a star with a 2x2 diamond-shaped box under each point.  `Shape::star2x2(4, 0)` is
     /// equivalent to `Shape::square(2, 2)`.
-    #[allow(clippy::identity_op)]
     pub fn star2x2(num_points: usize, base_angle: f32) -> Shape {
-        // The star is always made of 2x2 boxes
-        let box_width = 2usize;
-        // There will always be a vertical spoke going upwards (i.e. in the -Y direction) from
-        // the centre (which is referred to with index 0), and the box to the right of this is
-        // likewise referred to with index 0.  Numbers are increased when going **clockwise**
-        let spoke_directions = (0..num_points)
-            .map(|spoke_num| {
-                let mut angle = 2.0 * PI * spoke_num as f32 / num_points as f32;
-                angle += base_angle;
-                V2::new(f32::sin(angle), -f32::cos(angle))
-            })
-            .collect_vec();
-
-        /* VERTICES */
-
-        // Create the vertices in 3 stages (centre, 'spokes' between boxes, verts in one box),
-        // keeping separate maps for each of them (except the centre, which is the vertex at index
-        // 0).
-        let mut verts = vec![V2::new(0.0, 0.0)]; // The centre of the star is at index 0
-
-        // Add the spokes.  The HashMap maps (spoke_idx, distance from centre) to the vertex index
-        // in that location
-        let mut spoke_vert_idxs = HashMap::<(usize, usize), usize>::new();
-        for (spoke_idx, spoke_dir) in spoke_directions.iter().enumerate() {
-            for spoke_dist in 1..=box_width {
-                spoke_vert_idxs.insert((spoke_idx, spoke_dist), verts.len());
-                verts.push(spoke_dir * spoke_dist as f32);
-            }
-        }
-        // Add the verts inside each box.  The HashMap maps (box_idx, dist_in_left_spoke,
-        // dist_in_right_spoke) to the vertex index at that location (left/right according to
-        // someone standing at the centre and looking out)
-        let mut sub_box_verts_idxs = HashMap::<(usize, usize, usize), usize>::new();
-        for (box_idx, (left_spoke, right_spoke)) in
-            spoke_directions.iter().circular_tuple_windows().enumerate()
-        {
-            for left_dist in 1..=box_width {
-                for right_dist in 1..=box_width {
-                    sub_box_verts_idxs.insert((box_idx, left_dist, right_dist), verts.len());
-                    verts.push(left_spoke * left_dist as f32 + right_spoke * right_dist as f32);
-                }
-            }
-        }
-
-        /* CELLS */
-
-        // Helper function to fetch the index of a vertex given its coordinates within a box
-        let vert_idx = |box_idx: usize, left_spoke_dist: usize, right_spoke_dist: usize| {
-            match (left_spoke_dist, right_spoke_dist) {
-                // If both distances are 0, then this coordinate refers to the centre
-                (0, 0) => 0,
-                // If just the right spoke dist is 0, then this coordinate is on the left spoke
-                // (i.e. the one who's idx the same as the box's)
-                (l, 0) => *spoke_vert_idxs.get(&(box_idx, l)).unwrap(),
-                // If just the left spoke dist is 0, then this coordinate is on the right spoke
-                // (i.e. the one who's idx is equal to the box's idx plus 1 - wrapping back to 0 if
-                // needed).
-                (0, r) => *spoke_vert_idxs
-                    .get(&((box_idx + 1) % num_points, r))
-                    .unwrap(),
-                // If neither distance is 0 then the vertex is not on a spoke and we should look it
-                // up in the boxes table
-                (l, r) => *sub_box_verts_idxs.get(&(box_idx, l, r)).unwrap(),
-            }
-        };
-
-        let mut cell_verts = Vec::<Vec<usize>>::new();
-        for box_idx in 0..num_points {
-            for left_spoke_dist in 0..box_width {
-                for right_spoke_dist in 0..box_width {
-                    cell_verts.push(vec![
-                        // Push the vertices, going anti-clockwise, starting from the vertex
-                        // nearest the centre
-                        vert_idx(box_idx, left_spoke_dist + 0, right_spoke_dist + 0),
-                        vert_idx(box_idx, left_spoke_dist + 1, right_spoke_dist + 0),
-                        vert_idx(box_idx, left_spoke_dist + 1, right_spoke_dist + 1),
-                        vert_idx(box_idx, left_spoke_dist + 0, right_spoke_dist + 1),
-                    ]);
-                }
-            }
-        }
-
-        /* GROUPS */
-
-        // Helper function to get the index of a cell given its location
-        let cell_idx = |box_idx: usize, left_coord: usize, right_coord: usize| {
-            // Note how the terms in this equation follow the same order as the loops used to
-            // generate the cells
-            (box_idx * box_width * box_width) + (left_coord * box_width) + right_coord
-        };
-
-        let mut groups = Vec::<Vec<usize>>::new();
-        // Rows/columns.  These start following the left spoke of the first box, then move to
-        // following the right spoke of the 2nd box (left/right are again the directions seen from
-        // the centre of the star looking out)
-        for (left_box_idx, right_box_idx) in (0..num_points).circular_tuple_windows() {
-            for dist_from_centre in 0..box_width {
-                let mut group = Vec::<usize>::new();
-                // Section in left box
-                group.extend(
-                    (0..box_width)
-                        .map(|left_coord| cell_idx(left_box_idx, left_coord, dist_from_centre)),
-                );
-                // Section in right box
-                group.extend(
-                    (0..box_width)
-                        .map(|right_coord| cell_idx(right_box_idx, dist_from_centre, right_coord)),
-                );
-
-                groups.push(group);
-            }
-        }
-        // Boxes
-        for box_idx in 0..num_points {
-            groups.push(
-                // Because we generated the cells box-by-box, each box contains a region of
-                // consecutively indexed cells.
-                (0..box_width * box_width)
-                    .map(|i| box_idx * box_width * box_width + i)
-                    .collect_vec(),
-            );
-        }
-
-        Self {
-            num_symbols: box_width * box_width,
-            groups,
-            verts,
-            cell_verts,
-        }
+        // Create a new builder with 5-way rotational symmetry
+        let mut builder = Builder::new(2, 2, num_points);
+        // Create a new parallelogram box for the star's point
+        let down = V2::new(0.0, -1.0);
+        let rotated_down = builder.rotate_point_by_steps(down, 1);
+        builder.add_box_parallelogram(V2::new(0.0, 0.0), down, rotated_down);
+        // Rotate the built shape by the requested amount
+        builder.rotate(base_angle);
+        // Build the shape
+        let (shape, _symmetry) = builder.build().unwrap();
+        shape // For the time being, throw away the symmetry
     }
 }
 
