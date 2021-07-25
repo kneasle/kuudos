@@ -73,14 +73,14 @@ impl<Idx, T> TypedVec<Idx, T> {
     where
         Idx: IdxType,
     {
-        self.inner.get(idx.as_idx())
+        self.inner.get(idx.to_idx())
     }
 
     pub fn get_mut(&mut self, idx: Idx) -> Option<&mut T>
     where
         Idx: IdxType,
     {
-        self.inner.get_mut(idx.as_idx())
+        self.inner.get_mut(idx.to_idx())
     }
 
     /* ITER FUNCTIONS */
@@ -151,7 +151,7 @@ macro_rules! idx_impl {
                 Self { idx }
             }
 
-            fn as_idx(self) -> usize {
+            fn to_idx(self) -> usize {
                 self.idx
             }
         }
@@ -169,5 +169,5 @@ idx_impl!(VertIdx, VertVec);
 pub trait IdxType {
     fn from_idx(idx: usize) -> Self;
 
-    fn as_idx(self) -> usize;
+    fn to_idx(self) -> usize;
 }

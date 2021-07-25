@@ -10,7 +10,7 @@ use crate::{
 /// Solves a sudoku, returning a possible error if there are no or multiple solutions
 pub fn solve(
     shape: &Shape,
-    clues: &Vec<Option<usize>>,
+    clues: &[Option<usize>],
     check_multiple_solns: bool,
 ) -> Result<Vec<usize>, Error> {
     if shape.num_cells() != clues.len() {
@@ -129,12 +129,6 @@ struct ShapeData {
     /// For a cell with index `i`, `affected_cells[i]` contains the set of cells which share a
     /// house with cell `i` (**excluding** `i` itself)
     affected_cells: CellVec<Vec<CellIdx>>,
-}
-
-impl ShapeData {
-    fn num_cells(&self) -> usize {
-        self.affected_cells.len()
-    }
 }
 
 impl From<&Shape> for ShapeData {

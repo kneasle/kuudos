@@ -475,7 +475,7 @@ fn get_lanes_down_path(
             lane_depth
         );
         // We know that the box size is valid, so add this box's cells to the lanes
-        for lane_idx in 0..num_lanes {
+        for (lane_idx, lane) in lanes.iter_mut().enumerate() {
             for idx_down_lane in 0..lane_depth {
                 // Rotate the coordinates according to the side we enter from:
                 //
@@ -493,7 +493,7 @@ fn get_lanes_down_path(
                     Side::Right => (lane_depth - 1 - idx_down_lane, num_lanes - 1 - lane_idx),
                 };
                 // Extend the corresponding lane
-                lanes[lane_idx].push(*cell_idx_by_coord.get(&CellCoord { box_idx, x, y }).unwrap());
+                lane.push(*cell_idx_by_coord.get(&CellCoord { box_idx, x, y }).unwrap());
             }
         }
     }
