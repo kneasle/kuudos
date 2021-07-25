@@ -20,11 +20,11 @@ pub fn gen_svg_string(
     let (bbox_min, bbox_max) = shape.bbox().expect("Shape should have at least one vertex");
     let padding_vec = V2::new(opts.padding, opts.padding);
 
-    let transform = |pt: V2| (pt - bbox_min + padding_vec) * scaling;
+    let transform = |pt: &V2| (*pt - bbox_min + padding_vec) * scaling;
 
     // Transform the vertices so that their min-point is (padding, padding) and they're scaled up
     // by the `scaling` factor
-    let transformed_verts = shape.verts.iter().copied().map(transform).collect_vec();
+    let transformed_verts = shape.verts.map(transform);
     // Compute the dimensions of the resulting SVG image
     let img_dimensions = (bbox_max - bbox_min + padding_vec * 2.0) * scaling;
 
@@ -34,7 +34,7 @@ pub fn gen_svg_string(
     root.add_attribute("height", &img_dimensions.y.to_string());
 
     // Add the cell backgrounds
-    for vert_idxs in &shape.cell_verts {
+    for vert_idxs in shape.cell_verts.iter() {
         let coord_string = vert_idxs
             .iter()
             .map(|&idx| {
@@ -59,7 +59,7 @@ pub fn gen_svg_string(
             }
             let mut untransformed_centre = sum / vert_idxs.len() as f32;
             untransformed_centre.y += opts.font_size * opts.text_vertical_nudge;
-            let centre = transform(untransformed_centre);
+            let centre = transform(&untransformed_centre);
 
             let mut content_elem = XMLElement::new("text");
             content_elem.add_attribute("x", &centre.x.to_string());

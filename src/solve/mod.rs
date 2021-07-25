@@ -2,12 +2,15 @@ use std::fmt::{Display, Formatter};
 
 use itertools::Itertools;
 
-use crate::Shape;
+use crate::{
+    types::{CellIdx, CellVec, IdxType},
+    Shape,
+};
 
 /// Solves a sudoku, returning a possible error if there are no or multiple solutions
 pub fn solve(
     shape: &Shape,
-    clues: &[Option<usize>],
+    clues: &Vec<Option<usize>>,
     check_multiple_solns: bool,
 ) -> Result<Vec<usize>, Error> {
     if shape.num_cells() != clues.len() {
@@ -24,6 +27,7 @@ pub fn solve(
     clues
         .iter()
         .enumerate()
+        .map(|(idx, v)| (CellIdx::from_idx(idx), v))
         .filter_map(|(i, maybe_v)| maybe_v.map(|v| (i, v)))
         .for_each(|(cell_idx, value)| partial.pen(&data, cell_idx, value));
 
@@ -42,7 +46,7 @@ fn recursive_solve(
     // Partial.
     loop {
         let mut has_naked_singles = false;
-        for cell_idx in 0..data.num_cells() {
+        for (cell_idx, _cell) in data.affected_cells.indexed_iter() {
             // If this cell is a naked single then we pen its value
             if let Some(only_digit) = partial.naked_single_digit(cell_idx) {
                 has_naked_singles = true;
@@ -74,8 +78,7 @@ fn recursive_solve(
     // the fewest options
     let min_idx = partial
         .num_pencil_marks
-        .iter()
-        .enumerate()
+        .indexed_iter()
         .min_by_key(|(_cell_idx, num_opts)| **num_opts)
         .map(|(cell_idx, _)| cell_idx)
         .expect("Grid has no cells");
@@ -125,7 +128,7 @@ fn recursive_solve(
 struct ShapeData {
     /// For a cell with index `i`, `affected_cells[i]` contains the set of cells which share a
     /// house with cell `i` (**excluding** `i` itself)
-    affected_cells: Vec<Vec<usize>>,
+    affected_cells: CellVec<Vec<CellIdx>>,
 }
 
 impl ShapeData {
@@ -136,7 +139,8 @@ impl ShapeData {
 
 impl From<&Shape> for ShapeData {
     fn from(shape: &Shape) -> Self {
-        let mut affected_cells: Vec<Vec<usize>> = vec![Vec::new(); shape.num_cells()];
+        let mut affected_cells: CellVec<Vec<CellIdx>> =
+            CellVec::repeat(Vec::new(), shape.num_cells());
         for cell_idxs_in_group in &shape.groups {
             for &cell_idx in cell_idxs_in_group {
                 affected_cells[cell_idx]
@@ -144,7 +148,7 @@ impl From<&Shape> for ShapeData {
             }
         }
         // Deduplicate the lists of affected cells
-        for cells in &mut affected_cells {
+        for cells in affected_cells.iter_mut() {
             cells.sort_unstable();
             cells.dedup();
         }
@@ -156,7 +160,7 @@ impl From<&Shape> for ShapeData {
 #[derive(Debug, Clone)]
 struct Partial {
     /// Which cells have 'penned' values
-    penned_cells: Vec<Option<usize>>,
+    penned_cells: CellVec<Option<usize>>,
     /// How many cells are 'unpenned'.
     ///
     /// Invariant: `num_unpenned_cells = penned_cells.iter().filter(|c| c.is_none()).count()`
@@ -164,11 +168,11 @@ struct Partial {
 
     /// A bitmask for each cell, where a `1` at position `i` means that digit `i` can be placed in
     /// that cell
-    pencil_masks: Vec<usize>,
+    pencil_masks: CellVec<usize>,
     /// How many options are left per cell.
     ///
     /// Invariant: for all i: `num_options_left[i] = options_per_cell[i].count_ones()`
-    num_pencil_marks: Vec<usize>,
+    num_pencil_marks: CellVec<usize>,
 }
 
 impl Partial {
@@ -177,15 +181,15 @@ impl Partial {
         // `all_options` has `shape.num_symbols` 1s in its lowest bits, and 0s elsewhere
         let all_options = (1 << shape.num_symbols) - 1;
         Self {
-            penned_cells: vec![None; shape.num_cells()],
+            penned_cells: CellVec::repeat(None, shape.num_cells()),
             num_unpenned_cells: shape.num_cells(),
-            pencil_masks: vec![all_options; shape.num_cells()],
-            num_pencil_marks: vec![shape.num_symbols; shape.num_cells()],
+            pencil_masks: CellVec::repeat(all_options, shape.num_cells()),
+            num_pencil_marks: CellVec::repeat(shape.num_symbols, shape.num_cells()),
         }
     }
 
     /// Pen a value in a given cell
-    fn pen(&mut self, data: &ShapeData, cell_idx: usize, value: usize) {
+    fn pen(&mut self, data: &ShapeData, cell_idx: CellIdx, value: usize) {
         // Record the penned value in the current cell
         if self.penned_cells[cell_idx].is_none() {
             self.num_unpenned_cells -= 1;
@@ -209,7 +213,7 @@ impl Partial {
 
     /// Is the given cell a 'naked single' (_\*sniggering intensifies\*_) - i.e. is there only one
     /// cell that can go in it?
-    fn naked_single_digit(&self, cell_idx: usize) -> Option<usize> {
+    fn naked_single_digit(&self, cell_idx: CellIdx) -> Option<usize> {
         let is_naked_single = self.num_pencil_marks[cell_idx] == 1;
         if is_naked_single {
             Some(63 - self.pencil_masks[cell_idx].leading_zeros() as usize)
@@ -230,7 +234,7 @@ impl Partial {
     /// Panics if `self.is_solved()` is `false`
     fn into_solved_digits(self) -> Vec<usize> {
         self.penned_cells
-            .into_iter()
+            .iter()
             .map(|v| v.expect("`recursive_solve` returned an unsolved grid"))
             .collect_vec()
     }
@@ -246,11 +250,10 @@ impl Partial {
             self.num_unpenned_cells,
             self.penned_cells.iter().filter(|c| c.is_none()).count()
         );
-        for (cell_idx, (pencil_mask, count)) in self
+        for ((cell_idx, pencil_mask), count) in self
             .pencil_masks
-            .iter()
-            .zip_eq(&self.num_pencil_marks)
-            .enumerate()
+            .indexed_iter()
+            .zip_eq(self.num_pencil_marks.iter())
         {
             // This invariant only applies to unpenned cells
             if self.penned_cells[cell_idx].is_some() {
@@ -269,11 +272,11 @@ impl Partial {
 
 impl Display for Partial {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        for (pen, (pencil_mask, opts_left)) in self
-            .penned_cells
-            .iter()
-            .zip_eq(self.pencil_masks.iter().zip_eq(&self.num_pencil_marks))
-        {
+        for (pen, (pencil_mask, opts_left)) in self.penned_cells.iter().zip_eq(
+            self.pencil_masks
+                .iter()
+                .zip_eq(self.num_pencil_marks.iter()),
+        ) {
             match pen {
                 Some(p) => writeln!(f, "{:>2}: {:0>16b} {}", p, pencil_mask, opts_left)?,
                 None => writeln!(f, "  : {:0>16b} {}", pencil_mask, opts_left)?,

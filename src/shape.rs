@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use itertools::Itertools;
 
+use crate::types::{CellIdx, CellVec, IdxType, VertIdx, VertVec};
 use crate::{Builder, V2};
 
 /// The shape of a sudoku as accepted by Kuudos
@@ -11,15 +12,15 @@ pub struct Shape {
     /// How many different symbols are allowed in this `Shape`
     pub(crate) num_symbols: usize,
     /// Each group specifies a set of cells which can't contain two of the same symbol
-    pub(crate) groups: Vec<Vec<usize>>,
+    pub(crate) groups: Vec<Vec<CellIdx>>,
 
     /* DISPLAY DATA */
     /// The 2D coordinates of the vertices of this shape
-    pub(crate) verts: Vec<V2>,
+    pub(crate) verts: VertVec<V2>,
     /// Each cell is a list of indices of vertices **in clockwise order**.  These will almost
     /// certainly have 4 vertices (and therefore sides), but leaving this generic allows Kuudos to
     /// handle other Sudoku shapes, such as those with hexagonal cells
-    pub(crate) cell_verts: Vec<Vec<usize>>,
+    pub(crate) cell_verts: CellVec<Vec<VertIdx>>,
 }
 
 impl Shape {
@@ -29,7 +30,11 @@ impl Shape {
     }
 
     /// Returns the number of groups which are shared between two cells
-    pub(crate) fn num_groups_shared_between(&self, cell_idx1: usize, cell_idx2: usize) -> usize {
+    pub(crate) fn num_groups_shared_between(
+        &self,
+        cell_idx1: CellIdx,
+        cell_idx2: CellIdx,
+    ) -> usize {
         self.groups
             .iter()
             .filter(|cells| cells.contains(&cell_idx1) && cells.contains(&cell_idx2))
@@ -44,9 +49,9 @@ impl Shape {
     pub(crate) fn edges(&self) -> Vec<Edge> {
         // This maps (vert_idx_bottom, vert_idx_top) pairs to the Edges that they correspond to.
         // This allows the 2nd adjacent cell to figure out which edges it joins together
-        let mut edges = HashMap::<(usize, usize), Edge>::new();
+        let mut edges = HashMap::<(VertIdx, VertIdx), Edge>::new();
 
-        for (cell_idx, verts) in self.cell_verts.iter().enumerate() {
+        for (cell_idx, verts) in self.cell_verts.indexed_iter() {
             // Iterate over the edges of this cell in clockwise order (i.e. with this cell on the
             // **right** side of each edge).
             for (&vert_idx_bottom, &vert_idx_top) in verts.iter().circular_tuple_windows() {
@@ -87,7 +92,7 @@ impl Shape {
         let mut min_y = f32::MAX;
         let mut max_x = f32::MIN;
         let mut max_y = f32::MIN;
-        for v in &self.verts {
+        for v in self.verts.iter() {
             if v.x < min_x {
                 min_x = v.x;
             }
@@ -134,12 +139,11 @@ impl Shape {
          * Vertices are also labelled that way
          */
         let grid_width = box_height * box_width;
-
-        let cell_idx = |row: usize, col: usize| (row * grid_width) + col;
+        let cell_idx = |row: usize, col: usize| CellIdx::from_idx((row * grid_width) + col);
 
         /* GENERATE GROUPS */
 
-        let mut groups = Vec::<Vec<usize>>::with_capacity(grid_width * 3);
+        let mut groups = Vec::<Vec<CellIdx>>::with_capacity(grid_width * 3);
         // Rows
         for row in 0..grid_width {
             groups.push((0..grid_width).map(|col| cell_idx(row, col)).collect_vec());
@@ -172,7 +176,7 @@ impl Shape {
         /* SHAPE */
 
         // Generate the vertices, labelled as they would be read in a book
-        let mut verts = Vec::<V2>::with_capacity((grid_width + 1) * (grid_width + 1));
+        let mut verts = VertVec::<V2>::with_capacity((grid_width + 1) * (grid_width + 1));
         for y in 0..=grid_width {
             for x in 0..=grid_width {
                 verts.push(V2::new(x as f32, y as f32));
@@ -180,8 +184,8 @@ impl Shape {
         }
 
         // Generate which vertices go round each cell
-        let vert_idx = |x: usize, y: usize| y * (grid_width + 1) + x;
-        let mut cell_verts = Vec::<Vec<usize>>::with_capacity(grid_width * grid_width);
+        let vert_idx = |x: usize, y: usize| VertIdx::from_idx(y * (grid_width + 1) + x);
+        let mut cell_verts = CellVec::<Vec<VertIdx>>::with_capacity(grid_width * grid_width);
         for row in 0..grid_width {
             for col in 0..grid_width {
                 cell_verts.push(
@@ -222,10 +226,10 @@ impl Shape {
 /// cells.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Edge {
-    pub(crate) vert_idx_top: usize,
-    pub(crate) vert_idx_bottom: usize,
-    pub(crate) cell_idx_left: Option<usize>,
-    pub(crate) cell_idx_right: usize,
+    pub(crate) vert_idx_top: VertIdx,
+    pub(crate) vert_idx_bottom: VertIdx,
+    pub(crate) cell_idx_left: Option<CellIdx>,
+    pub(crate) cell_idx_right: CellIdx,
 }
 
 /// A grouping of cells of a [`Shape`] into equivalence classes which determine the symmetry of the

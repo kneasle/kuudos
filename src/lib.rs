@@ -4,6 +4,7 @@ mod builder;
 mod shape;
 pub mod solve;
 pub mod svg;
+mod types;
 
 pub use builder::Builder;
 pub use shape::{Shape, Symmetry};

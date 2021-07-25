@@ -1,6 +1,9 @@
 use std::f32::consts::PI;
 
-use crate::{Shape, Symmetry, V2};
+use crate::{
+    types::{BoxVec, VertIdx, VertVec},
+    Shape, Symmetry, V2,
+};
 
 /// Code for converting a `Builder` into a [`Shape`]/[`Symmetry`] pair
 mod build;
@@ -23,14 +26,14 @@ pub struct Builder {
     rotational_symmetry_factor: usize,
 
     /// The coordinates of the vertices added so far
-    verts: Vec<Vert>,
+    verts: VertVec<Vert>,
     /// The boxes added to the shape so far.  These arrays store the vertex indices going clockwise
     /// from the 'bottom left' of the box.  In reality, it's totally fine for people to rotate or
     /// reflect boxes (thus moving the 'bottom left' corner to some other direction), but this way
     /// we always have a consistent way to refer to the sides of boxes.  Additionally, the boxes
     /// may be reflected (possibly in the case of reflectional symmetry) which is fine for a
     /// `Builder` but not for a [`Shape`] (this is handled by [`Builder::build`]).
-    boxes: Vec<[usize; 4]>,
+    boxes: BoxVec<[VertIdx; 4]>,
     /// The number given to the next vertex equivalence class
     next_equiv_class: usize,
 }
@@ -45,8 +48,8 @@ impl Builder {
             box_height,
             rotational_symmetry_factor,
 
-            verts: Vec::new(),
-            boxes: Vec::new(),
+            verts: VertVec::new(),
+            boxes: BoxVec::new(),
 
             next_equiv_class: 0,
         }
@@ -78,11 +81,10 @@ impl Builder {
 
     /// Gets the vertex at a given position, creating a new vertex if necessary.
     /// This also creates symmetric versions of the new vertex and labels them as equivalent.
-    fn get_vert_at(&mut self, new_pos: V2) -> usize {
+    fn get_vert_at(&mut self, new_pos: V2) -> VertIdx {
         let existing_vert_idx = self
             .verts
-            .iter()
-            .position(|vert| (vert.position - new_pos).length() < 0.0001);
+            .idx_of_first(|vert| (vert.position - new_pos).length() < 0.0001);
 
         // If this vertex already exists, then return its index without creating a new set of
         // vertices
@@ -93,18 +95,16 @@ impl Builder {
         // If the new vertex is at the origin, then all its rotations will be the same and so we
         // add it once
         if new_pos.length_squared() < 0.00001 * 0.00001 {
-            let new_idx = self.verts.len();
-            self.verts.push(Vert {
+            return self.verts.push(Vert {
                 position: V2::new(0.0, 0.0),
                 equiv_class: VertEquivClass::Centre,
             });
-            return new_idx;
         }
 
         // Because (currently) the symmetry factor must stay constant, if this vertex doesn't
         // already exist, then all of its rotations must also not already exist.  Therefore, we
         // can create all the rotational copies without checking if they already exist.
-        let idx_of_new_vert = self.verts.len();
+        let idx_of_new_vert = self.verts.next_idx();
         let equiv_class = self.fresh_equiv_class();
         for i in 0..self.rotational_symmetry_factor {
             self.verts.push(Vert {
@@ -131,7 +131,7 @@ impl Builder {
     /// radians
     pub fn rotate(&mut self, angle: f32) {
         // Rotate all the vertices in-place
-        for vert in &mut self.verts {
+        for vert in self.verts.iter_mut() {
             vert.position = rotate_vec(vert.position, angle);
         }
     }

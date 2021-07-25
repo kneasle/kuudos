@@ -6,7 +6,10 @@ use std::{
 
 use itertools::Itertools;
 
-use crate::{Builder, Shape, Symmetry, V2};
+use crate::{
+    types::{BoxIdx, CellIdx, CellVec, EdgeIdx, EdgeVec, VertIdx, VertVec},
+    Builder, Shape, Symmetry, V2,
+};
 
 /* FUNCTIONS TO EXPORT */
 
@@ -43,11 +46,11 @@ pub fn build(mut bdr: Builder) -> Result<(Shape, Symmetry), BuildError> {
 #[derive(Debug, Clone)]
 pub enum BuildError {
     /// Three vertices in a box form a straight line
-    LinearBox { box_idx: usize },
+    LinearBox { box_idx: BoxIdx },
     /// The built shape contains a box that isn't strictly convex
-    NonConvexBox { box_idx: usize },
+    NonConvexBox { box_idx: BoxIdx },
     /// The built shape contains a box that self-intersects (i.e. is a bow-tie shape)
-    SelfIntersectingBox { box_idx: usize },
+    SelfIntersectingBox { box_idx: BoxIdx },
 
     /// An edge has two boxes attached to the same side of it.  Note that edges often have two
     /// boxes attached, but they are attached in opposite directions (because vertices are always
@@ -68,13 +71,16 @@ pub enum BuildError {
     ///  /   / \   \
     /// 3 - 2   3 - 2
     /// ```
-    OverlappingFacesOnEdge { box_idx_1: usize, box_idx_2: usize },
+    OverlappingFacesOnEdge {
+        box_idx_1: BoxIdx,
+        box_idx_2: BoxIdx,
+    },
     /// Two boxes on either side of an edge disagree on the number of cells.
     InconsistentEdge {
-        box_idx_left: usize,
+        box_idx_left: BoxIdx,
         num_cells_left: usize,
 
-        box_idx_right: usize,
+        box_idx_right: BoxIdx,
         num_cells_right: usize,
     },
 }
@@ -88,8 +94,8 @@ pub enum BuildError {
 fn normalise_box_direction(bdr: &mut Builder) -> Result<(), BuildError> {
     // List of indices of boxes which need to be flipped (we can't flip them in the loop
     // without tripping the borrow checker)
-    let mut anti_clockwise_box_idxs = Vec::<usize>::new();
-    for (box_idx, vert_idxs) in bdr.boxes.iter().enumerate() {
+    let mut anti_clockwise_box_idxs = Vec::<BoxIdx>::new();
+    for (box_idx, vert_idxs) in bdr.boxes.indexed_iter() {
         // Iterate over the positions of all consecutive triple of vertices, and classify that
         // corner according to its direction
         let directions = vert_idxs
@@ -148,15 +154,15 @@ fn normalise_box_direction(bdr: &mut Builder) -> Result<(), BuildError> {
 
 /// Assuming that the boxes all specify their vertices in clockwise order, generate a list of
 /// [`Edge`]s to connect the boxes/vertices into a full graph.
-fn generate_edges(bdr: &Builder) -> Result<(Vec<Edge>, BoxEdgeMap), BuildError> {
+fn generate_edges(bdr: &Builder) -> Result<(EdgeVec<Edge>, BoxEdgeMap), BuildError> {
     let mut box_side_map: BoxEdgeMap = HashMap::new();
-    let mut edges = Vec::<Edge>::new();
+    let mut edges = EdgeVec::<Edge>::new();
     // This map tracks pair of (bottom, top) vertices and the edge that joins them (if found so
     // far).  All `Edge`s are stored here, and reversing the vertex pair will test whether or
     // not (the reverse of) the given edge has already been found, in which case we have found
     // the 2nd box of that `Edge`.
-    let mut edge_map = HashMap::<(usize, usize), usize>::new();
-    for (box_idx, vert_idxs) in bdr.boxes.iter().enumerate() {
+    let mut edge_map = HashMap::<(VertIdx, VertIdx), EdgeIdx>::new();
+    for (box_idx, vert_idxs) in bdr.boxes.indexed_iter() {
         // These indices will make the current box on the right of
         // `edges[(vert_idx_bottom, vert_idx_top)]`.
         for (side_idx, (&vert_idx_bottom, &vert_idx_top)) in
@@ -200,8 +206,7 @@ fn generate_edges(bdr: &Builder) -> Result<(Vec<Edge>, BoxEdgeMap), BuildError> 
             }
 
             // Get the index of the newly added edge
-            let new_edge_idx = edges.len();
-            edges.push(Edge {
+            let new_edge_idx = edges.push(Edge {
                 vert_idx_bottom,
                 vert_idx_top,
                 box_left: None,
@@ -223,19 +228,19 @@ fn generate_edges(bdr: &Builder) -> Result<(Vec<Edge>, BoxEdgeMap), BuildError> 
 /// which vertices appear in which faces
 fn generate_cell_vertices(
     bdr: &Builder,
-    edges: &[Edge],
-) -> Result<(Vec<V2>, HashMap<VertCoord, usize>), BuildError> {
+    edges: &EdgeVec<Edge>,
+) -> Result<(VertVec<V2>, HashMap<VertCoord, VertIdx>), BuildError> {
     // List of all the vertices of **cells** not boxes.  This starts out as the same as
     // `b.verts`, which means that the indices specified by box corners are valid for both
     // vertex lists
-    let mut cell_vert_positions = bdr.verts.iter().map(|v| v.position).collect_vec();
+    let mut cell_vert_positions = bdr.verts.map(|v| v.position);
     // This maps triples of `(box_idx, box_coord_right, box_coord_up)` to the index of the
     // vertex at that position.  In this set `(i, 0, 0)` is the bottom-left vertex of box `i`,
     // and `(i, b.box_width, b.box_height)` is the top-right vertex of box `i`.
-    let mut cell_vert_indices = HashMap::<(usize, usize, usize), usize>::new();
+    let mut cell_vert_indices = HashMap::<(BoxIdx, usize, usize), VertIdx>::new();
 
     // Add the box's vertices as cell vertices
-    for (box_idx, [bl_idx, tl_idx, tr_idx, br_idx]) in bdr.boxes.iter().enumerate() {
+    for (box_idx, [bl_idx, tl_idx, tr_idx, br_idx]) in bdr.boxes.indexed_iter() {
         // Single-letter variable names make the `insert` statements line up nicely, which I
         // think is a net increase in readability
         let w = bdr.box_width;
@@ -248,7 +253,7 @@ fn generate_cell_vertices(
 
     // Add vertices down each edge, checking that boxes on either side of an edge agree on the
     // number of cells
-    for e in edges {
+    for e in edges.iter() {
         // Add internal vertices for this edges
         let vert_idxs = get_verts_in_edge(bdr, e, &mut cell_vert_positions)?;
         for (i, vert_idx) in vert_idxs.into_iter().enumerate() {
@@ -267,7 +272,7 @@ fn generate_cell_vertices(
     }
 
     // Add central vertices of each box
-    for (box_idx, [bl_idx, tl_idx, tr_idx, br_idx]) in bdr.boxes.iter().enumerate() {
+    for (box_idx, [bl_idx, tl_idx, tr_idx, br_idx]) in bdr.boxes.indexed_iter() {
         // Unpack the locations of the corner vertices
         let bl_pos = bdr.verts[*bl_idx].position;
         let tl_pos = bdr.verts[*tl_idx].position;
@@ -282,8 +287,7 @@ fn generate_cell_vertices(
                 let right_pos = V2::lerp(br_pos, tr_pos, y as f32 / bdr.box_height as f32);
                 let pos = V2::lerp(left_pos_, right_pos, x as f32 / bdr.box_width as f32);
                 // Add the new vertex to the list ...
-                let new_vert_idx = cell_vert_positions.len();
-                cell_vert_positions.push(pos);
+                let new_vert_idx = cell_vert_positions.push(pos);
                 // ... and add its index to the mapping
                 cell_vert_indices.insert((box_idx, x, y), new_vert_idx);
             }
@@ -302,11 +306,11 @@ fn generate_cell_vertices(
 /// Generates all the cells in each box, linking them to the corresponding vertices
 fn generate_cells(
     bdr: &Builder,
-    vert_idx_by_coord: &HashMap<VertCoord, usize>,
-) -> (Vec<Vec<usize>>, HashMap<CellCoord, usize>) {
-    let mut cells = Vec::<Vec<usize>>::new();
-    let mut cell_vert_idxs = HashMap::<CellCoord, usize>::new();
-    for box_idx in 0..bdr.boxes.len() {
+    vert_idx_by_coord: &HashMap<VertCoord, VertIdx>,
+) -> (CellVec<Vec<VertIdx>>, HashMap<CellCoord, CellIdx>) {
+    let mut cells = CellVec::<Vec<VertIdx>>::new();
+    let mut cell_vert_idxs = HashMap::<CellCoord, CellIdx>::new();
+    for (box_idx, _box) in bdr.boxes.indexed_iter() {
         for x in 0..bdr.box_width {
             for y in 0..bdr.box_height {
                 // Compute the coord and vertex indices
@@ -324,8 +328,7 @@ fn generate_cells(
                     })
                     .collect_vec();
                 // Add the cell to the lookup tables
-                let cell_idx = cells.len();
-                cells.push(vert_idxs);
+                let cell_idx = cells.push(vert_idxs);
                 cell_vert_idxs.insert(cell_coord, cell_idx);
             }
         }
@@ -337,14 +340,14 @@ fn generate_cells(
 /// Generates which groups of cells must not contain the same number
 fn generate_groups<'e>(
     bdr: &Builder,
-    edges: &'e [Edge],
-    cell_idx_by_coord: &HashMap<CellCoord, usize>,
+    edges: &'e EdgeVec<Edge>,
+    cell_idx_by_coord: &HashMap<CellCoord, CellIdx>,
     box_edge_map: &BoxEdgeMap,
-) -> Vec<Vec<usize>> {
-    let mut groups = Vec::<Vec<usize>>::new();
+) -> Vec<Vec<CellIdx>> {
+    let mut groups = Vec::<Vec<CellIdx>>::new();
 
     // Group cells into boxes (no graph traversal required)
-    for box_idx in 0..bdr.boxes.len() {
+    for (box_idx, _box) in bdr.boxes.indexed_iter() {
         let box_group = (0..bdr.box_width)
             .cartesian_product(0..bdr.box_height)
             .map(|(x, y)| *cell_idx_by_coord.get(&CellCoord { box_idx, x, y }).unwrap())
@@ -389,15 +392,15 @@ fn generate_groups<'e>(
 /// Traverse a path starting by entering a box at a given [`Edge`].  This returns a list of
 /// `(box_idx, side_entered)`.
 fn traverse_non_cyclic_path(
-    edges: &[Edge],
+    edges: &EdgeVec<Edge>,
     start_edge: &Edge,
     untraversed_edges: &mut HashSet<&Edge>,
     box_edge_map: &BoxEdgeMap,
-) -> Vec<(usize, Side)> {
+) -> Vec<(BoxIdx, Side)> {
     // Assert that the start edge only has one side (otherwise the path is non-cyclic)
     assert!(start_edge.box_left.is_none());
 
-    let mut box_path = Vec::<(usize, Side)>::new();
+    let mut box_path = Vec::<(BoxIdx, Side)>::new();
 
     let mut cur_edge = start_edge; // Which edge we're on
     let mut cur_box_idx = start_edge.box_idx_right; // The box we're entering
@@ -446,17 +449,18 @@ fn traverse_non_cyclic_path(
 // HELPER FUNCTIONS //
 //////////////////////
 
-type BoxEdgeMap = HashMap<(usize, Side), (usize, EdgeSide)>;
+type BoxEdgeMap = HashMap<(BoxIdx, Side), (EdgeIdx, EdgeSide)>;
 
+/// Convert a path through boxes into a set of lanes of cells which form the groups down that path
 fn get_lanes_down_path(
     bdr: &Builder,
-    box_path: &[(usize, Side)],
-    cell_idx_by_coord: &HashMap<CellCoord, usize>,
-) -> Vec<Vec<usize>> {
+    box_path: &[(BoxIdx, Side)],
+    cell_idx_by_coord: &HashMap<CellCoord, CellIdx>,
+) -> Vec<Vec<CellIdx>> {
     let num_lanes = box_size_in_direction(bdr, box_path[0].1.direction());
     let lane_depth = box_size_in_direction(bdr, !box_path[0].1.direction());
     // The lanes are numbered going clockwise around the perimeter of each box
-    let mut lanes = vec![Vec::<usize>::new(); num_lanes];
+    let mut lanes = vec![Vec::<CellIdx>::new(); num_lanes];
 
     for &(box_idx, entry_side) in box_path {
         // Sanity check that the edges being stepped over don't change the number or depth of
@@ -502,8 +506,8 @@ fn get_lanes_down_path(
 fn get_verts_in_edge(
     bdr: &Builder,
     edge: &Edge,
-    vert_vec: &mut Vec<V2>,
-) -> Result<Vec<usize>, BuildError> {
+    vert_vec: &mut VertVec<V2>,
+) -> Result<Vec<VertIdx>, BuildError> {
     // Decide how many cells this edge will be split into (specified by the right-hand box)
     let num_cells = get_num_cells_in_side(bdr, edge.box_side_right);
     // Check that the left-hand box agrees with this (if it exists)
@@ -523,14 +527,12 @@ fn get_verts_in_edge(
     // i.e. those which aren't on the corner of a box
     let vert_indices = (1..=num_cells - 1)
         .map(|cells_from_bot| {
-            let idx = vert_vec.len();
             let position = V2::lerp(
                 bdr.verts[edge.vert_idx_bottom].position,
                 bdr.verts[edge.vert_idx_top].position,
                 cells_from_bot as f32 / num_cells as f32,
             );
-            vert_vec.push(position);
-            idx
+            vert_vec.push(position)
         })
         .collect_vec();
     Ok(vert_indices)
@@ -608,7 +610,7 @@ impl CornerType {
 /// can be referred to by many `VertCoordinate` if it is shared between many faces.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct VertCoord {
-    box_idx: usize,
+    box_idx: BoxIdx,
     x: usize,
     y: usize,
 }
@@ -617,7 +619,7 @@ struct VertCoord {
 /// shape to [`VertCoord`], but the extra type safety of the two types is useful.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct CellCoord {
-    box_idx: usize,
+    box_idx: BoxIdx,
     x: usize,
     y: usize,
 }
@@ -627,11 +629,11 @@ struct CellCoord {
 /// the [`Edge`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct Edge {
-    vert_idx_top: usize,
-    vert_idx_bottom: usize,
+    vert_idx_top: VertIdx,
+    vert_idx_bottom: VertIdx,
 
-    box_left: Option<(usize, Side)>,
-    box_idx_right: usize,
+    box_left: Option<(BoxIdx, Side)>,
+    box_idx_right: BoxIdx,
     box_side_right: Side,
 }
 
