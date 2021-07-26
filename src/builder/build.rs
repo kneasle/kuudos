@@ -720,3 +720,30 @@ fn angle_between(v1: V2, v2: V2) -> f32 {
 
     angle_diff
 }
+
+#[cfg(test)]
+mod tests {
+    use std::f32::consts::PI;
+
+    use crate::V2;
+
+    #[test]
+    fn angle_between() {
+        fn check(v1: V2, v2: V2, exp_angle: f32) {
+            assert_eq!(super::angle_between(v1, v2), exp_angle);
+        }
+
+        // The angle from any direction to (any +ve scalar multiple of itself) is 0
+        check(V2::new(0.0, -1.0), V2::new(0.0, -1.0), 0.0);
+        check(V2::new(0.0, 1.0), V2::new(0.0, 1.0), 0.0);
+        check(V2::new(1.0, 1.0), V2::new(2.5, 2.5), 0.0);
+        // The angle from any direction to any -ve scalar multiple of itself is +PI
+        check(V2::new(0.0, 1.0), V2::new(0.0, -1.0), PI);
+        check(V2::new(1.0, -1.0), V2::new(-1.0, 1.0), PI);
+
+        check(V2::new(0.0, -1.0), V2::new(2.5, 0.0), PI / 2.0);
+        check(V2::new(0.0, 1.0), V2::new(2.5, 0.0), -PI / 2.0);
+        check(V2::new(0.0, 1.0), V2::new(-1.0, -1.0), 0.75 * PI);
+        check(V2::new(0.0, 1.0), V2::new(1.0, -1.0), -0.75 * PI);
+    }
+}
