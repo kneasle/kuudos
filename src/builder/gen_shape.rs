@@ -464,8 +464,8 @@ fn get_lanes_down_path(
     box_path: &[(BoxIdx, Side)],
     cell_idx_by_coord: &HashMap<CellCoord, CellIdx>,
 ) -> Vec<Vec<CellIdx>> {
-    let num_lanes = box_size_in_direction(bdr, box_path[0].1.direction());
-    let lane_depth = box_size_in_direction(bdr, !box_path[0].1.direction());
+    let num_lanes = bdr.box_size_in_direction(box_path[0].1.direction());
+    let lane_depth = bdr.box_size_in_direction(!box_path[0].1.direction());
     // The lanes are numbered going clockwise around the perimeter of each box
     let mut lanes = vec![Vec::<CellIdx>::new(); num_lanes];
 
@@ -473,12 +473,9 @@ fn get_lanes_down_path(
         // Sanity check that the edges being stepped over don't change the number or depth of
         // the lanes.  This should have been caught in `generate_edges` (and an error
         // returned), but it doesn't hurt to double check.
+        assert_eq!(bdr.box_size_in_direction(entry_side.direction()), num_lanes);
         assert_eq!(
-            box_size_in_direction(bdr, entry_side.direction()),
-            num_lanes
-        );
-        assert_eq!(
-            box_size_in_direction(bdr, !entry_side.direction()),
+            bdr.box_size_in_direction(!entry_side.direction()),
             lane_depth
         );
         // We know that the box size is valid, so add this box's cells to the lanes
@@ -574,14 +571,6 @@ fn get_sub_box_coord(
         Side::Top => (idx_along_edge, bdr.box_height),
         Side::Right => (bdr.box_width, bdr.box_height - idx_along_edge),
         Side::Bottom => (bdr.box_width - idx_along_edge, 0),
-    }
-}
-
-/// Gets the number of cells along any [`Edge`] of a box in a given [`Direction`].
-fn box_size_in_direction(bdr: &Builder, direction: Direction) -> usize {
-    match direction {
-        Direction::Horizontal => bdr.box_width,
-        Direction::Vertical => bdr.box_height,
     }
 }
 

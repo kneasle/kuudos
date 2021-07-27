@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use angle::Deg;
 use itertools::Itertools;
 use kuudos::{
@@ -11,17 +13,7 @@ const VALUE_NAMES: &str = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqr
 fn main() {
     let (shape, clues) = if true {
         // let s = Shape::star2x2(5, PI);
-        let mut builder = Builder::new(3, 3, 3);
-        let b = builder.add_box_square(V2::UP * 3.7, 1.0, Deg(-45.0));
-        builder
-            .connect_boxes(
-                b,
-                Side::Bottom,
-                builder.rotational_copy_of(b, 1).unwrap(),
-                Side::Left,
-            )
-            .unwrap();
-
+        let builder = nine_mens_morris();
         std::fs::write("bdr.svg", builder.as_svg(40.0)).unwrap();
 
         let (s, _symm) = builder.build().unwrap();
@@ -69,9 +61,50 @@ fn main() {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[allow(dead_code)]
 enum DisplayType {
     Clues,
     Solution,
     CellNames,
+}
+
+fn nine_mens_morris() -> Builder {
+    let mut bdr = Builder::new(3, 3, 4);
+
+    let line_box_1 = bdr.add_box_square(V2::UP * 3.0, 1.0, Deg(0.0));
+    let line_box_2 = bdr.extrude_edge(line_box_1, Side::Top).unwrap();
+    let line_box_3 = bdr.extrude_edge(line_box_2, Side::Top).unwrap();
+
+    let corner_box1 = bdr.add_box_square(V2::ONE * 3.0, 1.0, Deg(0.0));
+    let corner_box2 = bdr.add_box_square(V2::ONE * 6.0, 1.0, Deg(0.0));
+    let corner_box3 = bdr.add_box_square(V2::ONE * 9.0, 1.0, Deg(0.0));
+
+    bdr
+}
+
+fn race_track() -> Builder {
+    // Create a Builder with 3-fold symmetry
+    let mut bdr = Builder::new(3, 3, 3);
+
+    // Create a new parallelogram box to make a hexagon
+    let hex_box = bdr.add_box_parallelogram(V2::ZERO, V2::UP, bdr.rotate_point_by_steps(V2::UP, 1));
+    // Extrude a square face off one side
+    let outer_box = bdr.extrude_edge(hex_box, Side::Top).unwrap();
+
+    // Rotate the hexagon so that the side we extruded faces upwards
+    bdr.rotate(Deg(-30.0));
+    bdr
+}
+
+fn triangle() -> Builder {
+    let mut builder = Builder::new(3, 3, 3);
+    let b = builder.add_box_square(V2::UP * 3.7, 1.0, Deg(-45.0));
+    builder
+        .connect_edges(
+            b,
+            Side::Bottom,
+            builder.rotational_copy_of(b, 1).unwrap(),
+            Side::Left,
+        )
+        .unwrap();
+    builder
 }

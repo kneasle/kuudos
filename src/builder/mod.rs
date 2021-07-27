@@ -65,7 +65,7 @@ impl Builder {
 
     /* Add Boxes */
 
-    /// Adds a new square box with a given position, size and location
+    /// Adds a new square box with a given centre, size and location
     pub fn add_box_square(
         &mut self,
         centre: V2,
@@ -76,6 +76,17 @@ impl Builder {
         let half_diagonal =
             V2::new(self.box_width as f32, -(self.box_height as f32)) * cell_size / 2.0;
         let bottom_left = centre - half_diagonal.rotate(angle);
+        // Delegate to `add_box_square_by_corner`
+        self.add_box_square_by_corner(bottom_left, cell_size, angle)
+    }
+
+    /// Adds a new square box with a given centre, size and location
+    pub fn add_box_square_by_corner(
+        &mut self,
+        bottom_left: V2,
+        cell_size: f32,
+        angle: impl Angle<f32> + Copy,
+    ) -> BoxIdx {
         self.add_box_parallelogram(
             bottom_left,
             // Up and right directions are also scaled and rotated
@@ -100,15 +111,14 @@ impl Builder {
 
     /// Connect the edges of two (different) boxes with a new box
     #[must_use]
-    pub fn connect_boxes(
+    pub fn connect_edges(
         &mut self,
         top_box_idx: BoxIdx,
         top_edge: Side,
         bottom_box_idx: BoxIdx,
         bottom_edge: Side,
     ) -> Option<BoxIdx> {
-        // It doesn't make sense to connect two sides of the same box
-        assert_ne!(top_box_idx, bottom_box_idx);
+        assert_ne!(top_box_idx, bottom_box_idx); // You can't connect two sides of the same box
         let top_box = self.boxes.get(top_box_idx)?;
         let bottom_box = self.boxes.get(bottom_box_idx)?;
         let (vert_top_right, vert_top_left) = top_box.get_edge_verts(top_edge);
@@ -119,6 +129,34 @@ impl Builder {
             self.verts.get(vert_top_right).unwrap().position,
             self.verts.get(vert_bottom_right).unwrap().position,
         ))
+    }
+
+    /// Adds a new box which extends outwards from a given edge
+    #[must_use]
+    pub fn extrude_edge(&mut self, box_idx: BoxIdx, side: Side) -> Option<BoxIdx> {
+        self.extrude_edge_with_opts(box_idx, side, 1.0)
+    }
+
+    /// Adds a new box which extends outwards from a given edge, with extra options
+    #[must_use]
+    pub fn extrude_edge_with_opts(
+        &mut self,
+        box_idx: BoxIdx,
+        side: Side,
+        extruded_cell_height: f32,
+    ) -> Option<BoxIdx> {
+        // Extract the vertices of the side being extruded
+        let box_ = self.boxes.get(box_idx)?;
+        let (vert_idx1, vert_idx2) = box_.get_edge_verts(side);
+        let v1 = self.verts.get(vert_idx1).unwrap().position;
+        let v2 = self.verts.get(vert_idx2).unwrap().position;
+
+        let edge_direction = v2 - v1; // Vector pointing down the full length of the edge
+        let normal = -edge_direction.normal().normalise(); // Points outwards from the edge
+        let edge_direction_per_cell =
+            edge_direction / self.box_size_in_direction(side.direction()) as f32;
+
+        Some(self.add_box_parallelogram(v1, normal * extruded_cell_height, edge_direction_per_cell))
     }
 
     /// Adds a new box to the shape, given 4 arbitrary vertices
@@ -260,6 +298,14 @@ impl Builder {
         let class = self.next_equiv_class;
         self.next_equiv_class += 1;
         class
+    }
+
+    /// Gets the number of cells along any [`Edge`] of a box in a given [`Direction`].
+    fn box_size_in_direction(&self, direction: Direction) -> usize {
+        match direction {
+            Direction::Horizontal => self.box_width,
+            Direction::Vertical => self.box_height,
+        }
     }
 }
 
