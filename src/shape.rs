@@ -4,7 +4,7 @@ use angle::Angle;
 use itertools::Itertools;
 
 use crate::types::{CellIdx, CellVec, IdxType, VertIdx, VertVec};
-use crate::{Builder, V2};
+use crate::{utils, Builder, V2};
 
 /// The shape of a sudoku as accepted by Kuudos
 #[derive(Debug, Clone)]
@@ -84,30 +84,7 @@ impl Shape {
 
     /// Returns the bounding box of this `Shape` as a (min, max) pair of vectors
     pub(crate) fn bbox(&self) -> Option<(V2, V2)> {
-        // If the shape has no vertices, then the bounding box isn't defined
-        if self.verts.is_empty() {
-            return None;
-        }
-
-        let mut min_x = f32::MAX;
-        let mut min_y = f32::MAX;
-        let mut max_x = f32::MIN;
-        let mut max_y = f32::MIN;
-        for v in self.verts.iter() {
-            if v.x < min_x {
-                min_x = v.x;
-            }
-            if v.y < min_y {
-                min_y = v.y;
-            }
-            if v.x > max_x {
-                max_x = v.x;
-            }
-            if v.y > max_y {
-                max_y = v.y;
-            }
-        }
-        Some((V2::new(min_x, min_y), V2::new(max_x, max_y)))
+        utils::bbox(self.verts.iter().copied())
     }
 }
 

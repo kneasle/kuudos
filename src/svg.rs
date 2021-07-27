@@ -2,7 +2,7 @@ use itertools::Itertools;
 use rgb::RGB8;
 use simple_xml_builder::XMLElement;
 
-use crate::{Shape, V2};
+use crate::{utils, Shape, V2};
 
 /// Write an empty sudoku grid to an SVG string
 pub fn gen_empty_svg_string(shape: &Shape, opts: &RenderingOpts, scaling: f32) -> String {
@@ -53,11 +53,9 @@ pub fn gen_svg_string(
     let text_size_str = (opts.font_size * scaling).to_string();
     for (vert_idxs, value) in shape.cells.iter().zip_eq(assignment) {
         if let Some(c) = *value {
-            let mut sum = V2::new(0.0, 0.0);
-            for idx in vert_idxs {
-                sum += shape.verts[*idx];
-            }
-            let mut untransformed_centre = sum / vert_idxs.len() as f32;
+            let verts = vert_idxs.iter().map(|idx| shape.verts[*idx]);
+            let mut untransformed_centre =
+                utils::centroid(verts).expect("Can't have cell with no versions");
             untransformed_centre.y += opts.font_size * opts.text_vertical_nudge;
             let centre = transform(&untransformed_centre);
 

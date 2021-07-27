@@ -2,16 +2,18 @@ use std::ops::Not;
 
 use crate::{
     types::{BoxIdx, BoxVec, SymmIdx, SymmVec, VertIdx, VertVec},
+    utils::rotate_vec,
     Shape, Symmetry, V2,
 };
+
+use angle::{Angle, Deg};
+use itertools::Itertools;
 
 /// Code for converting a `Builder` into a [`Shape`]/[`Symmetry`] pair
 mod gen_shape;
 
-use angle::{Angle, Deg};
 /// Re-export [`BuildError`] to the rest of the code.  This is then re-re-exported in `lib.rs`
 pub use gen_shape::BuildError;
-use itertools::Itertools;
 
 /// A struct for programmatically building complex `Shapes`
 #[derive(Debug, Clone)]
@@ -313,21 +315,6 @@ enum VertEquivClass {
         /// resulting [`Shape`]
         equiv_rotation: usize,
     },
-}
-
-/// Rotates a vector **clockwise** by an angle in radians
-fn rotate_vec(v: V2, angle: impl Angle<f32> + Copy) -> V2 {
-    let sin = angle.sin();
-    let cos = angle.cos();
-    // Rotation **clockwise** corresponds to multiplication by the following matrix (which looks
-    // like the classic anti-clockwise matrix because our y-axis goes down where the one in maths
-    // goes up):
-    // | cos(angle)  -sin(angle) |
-    // | sin(angle)   cos(angle) |
-    V2 {
-        x: v.x * cos - v.y * sin,
-        y: v.x * sin + v.y * cos,
-    }
 }
 
 /// The possible directions through a box

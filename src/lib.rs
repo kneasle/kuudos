@@ -5,6 +5,7 @@ mod shape;
 pub mod solve;
 pub mod svg;
 mod types;
+mod utils;
 
 pub use builder::{Builder, Direction, Side};
 pub use shape::{Shape, Symmetry};
