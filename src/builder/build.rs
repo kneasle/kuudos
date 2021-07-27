@@ -58,12 +58,12 @@ pub enum BuildError {
     /// boxes attached, but they are attached in opposite directions (because vertices are always
     /// numbered in a consistent direction):
     /// ```text
-    /// 0 ----- (1 2) ----- 3
-    /// |   ->    |    ->   |
-    /// | ^     | | ^     | |
-    /// | |     V | |     V |
-    /// |   <-    |    <-   |
-    /// 3 ----- (2 1) ----- 0
+    /// 0 ------ (1 2) ------ 3
+    /// |   -->    |    -->   |
+    /// | ^      | | ^      | |
+    /// | |      V | |      V |
+    /// |   <--    |    <--   |
+    /// 3 ------ (2 1) ------ 0
     /// ```
     /// Overlapping boxes would look like this:
     /// ```text

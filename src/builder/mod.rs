@@ -151,52 +151,6 @@ impl Builder {
         idx_of_original_box
     }
 
-    /// Gets the vertex at a given position, creating a new vertex if necessary.
-    /// This also creates symmetric versions of the new vertex and labels them as equivalent.
-    fn get_vert_at(&mut self, new_pos: V2) -> VertIdx {
-        let existing_vert_idx = self
-            .verts
-            .idx_of_first(|vert| (vert.position - new_pos).length() < 0.0001);
-
-        // If this vertex already exists, then return its index without creating a new set of
-        // vertices
-        if let Some(idx) = existing_vert_idx {
-            return idx;
-        }
-
-        // If the new vertex is at the origin, then all its rotations will be the same and so we
-        // add it once
-        if new_pos.length_squared() < 0.00001 * 0.00001 {
-            return self.verts.push(Vert {
-                position: V2::new(0.0, 0.0),
-                equiv_class: VertEquivClass::Centre,
-            });
-        }
-
-        // Because (currently) the symmetry factor must stay constant, if this vertex doesn't
-        // already exist, then all of its rotations must also not already exist.  Therefore, we
-        // can create all the rotational copies without checking if they already exist.
-        let idx_of_new_vert = self.verts.next_idx();
-        let equiv_class = self.fresh_equiv_class();
-        for i in 0..self.rotational_symmetry_factor {
-            self.verts.push(Vert {
-                position: self.rotate_point_by_steps(new_pos, i as isize),
-                equiv_class: VertEquivClass::NonCentre {
-                    equiv_class,
-                    equiv_rotation: i,
-                },
-            });
-        }
-        idx_of_new_vert
-    }
-
-    /// Generates a fresh equivalence class name - i.e. one which hasn't been used before
-    fn fresh_equiv_class(&mut self) -> usize {
-        let class = self.next_equiv_class;
-        self.next_equiv_class += 1;
-        class
-    }
-
     /* Modifiers (i.e. functions which mutate the existing shape) */
 
     /// Rotates the whole shape around the origin (i.e. the centre of symmetry) by some angle in
@@ -252,6 +206,54 @@ impl Builder {
     /// Converts this `Builder` into a [`Shape`] and the associated [`Symmetry`]
     pub fn build(self) -> Result<(Shape, Symmetry), BuildError> {
         build::build(self)
+    }
+
+    /* Internal helpers */
+
+    /// Gets the vertex at a given position, creating a new vertex if necessary.
+    /// This also creates symmetric versions of the new vertex and labels them as equivalent.
+    fn get_vert_at(&mut self, new_pos: V2) -> VertIdx {
+        let existing_vert_idx = self
+            .verts
+            .idx_of_first(|vert| (vert.position - new_pos).length() < 0.0001);
+
+        // If this vertex already exists, then return its index without creating a new set of
+        // vertices
+        if let Some(idx) = existing_vert_idx {
+            return idx;
+        }
+
+        // If the new vertex is at the origin, then all its rotations will be the same and so we
+        // add it once
+        if new_pos.length_squared() < 0.00001 * 0.00001 {
+            return self.verts.push(Vert {
+                position: V2::new(0.0, 0.0),
+                equiv_class: VertEquivClass::Centre,
+            });
+        }
+
+        // Because (currently) the symmetry factor must stay constant, if this vertex doesn't
+        // already exist, then all of its rotations must also not already exist.  Therefore, we
+        // can create all the rotational copies without checking if they already exist.
+        let idx_of_new_vert = self.verts.next_idx();
+        let equiv_class = self.fresh_equiv_class();
+        for i in 0..self.rotational_symmetry_factor {
+            self.verts.push(Vert {
+                position: self.rotate_point_by_steps(new_pos, i as isize),
+                equiv_class: VertEquivClass::NonCentre {
+                    equiv_class,
+                    equiv_rotation: i,
+                },
+            });
+        }
+        idx_of_new_vert
+    }
+
+    /// Generates a fresh equivalence class name - i.e. one which hasn't been used before
+    fn fresh_equiv_class(&mut self) -> usize {
+        let class = self.next_equiv_class;
+        self.next_equiv_class += 1;
+        class
     }
 }
 
