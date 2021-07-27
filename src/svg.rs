@@ -127,8 +127,8 @@ pub fn gen_svg_string(
         edge_elem.add_attribute("y2", &vert_bottom.y.to_string());
         // Stroke style
         edge_elem.add_attribute("stroke", &color.to_string());
-        edge_elem.add_attribute("stroke-linecap", "round");
         edge_elem.add_attribute("stroke-width", width_str);
+        edge_elem.add_attribute("stroke-linecap", "round");
         root.add_child(edge_elem);
     }
 

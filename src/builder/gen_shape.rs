@@ -1,3 +1,5 @@
+//! Code for converting a `Builder` into a [`Shape`]/[`Symmetry`] pair
+
 use std::{
     collections::{HashMap, HashSet},
     f32::consts::PI,

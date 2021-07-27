@@ -9,7 +9,6 @@ use crate::{
 use angle::{Angle, Deg};
 use itertools::Itertools;
 
-/// Code for converting a `Builder` into a [`Shape`]/[`Symmetry`] pair
 mod gen_shape;
 
 /// Re-export [`BuildError`] to the rest of the code.  This is then re-re-exported in `lib.rs`
@@ -317,7 +316,7 @@ enum VertEquivClass {
     },
 }
 
-/// The possible directions through a box
+/// The possible directions an edge can face
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum Direction {
     Horizontal,
