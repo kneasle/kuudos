@@ -34,7 +34,7 @@ pub fn gen_svg_string(
     root.add_attribute("height", &img_dimensions.y.to_string());
 
     // Add the cell backgrounds
-    for vert_idxs in shape.cell_verts.iter() {
+    for vert_idxs in shape.cells.iter() {
         let coord_string = vert_idxs
             .iter()
             .map(|&idx| {
@@ -51,7 +51,7 @@ pub fn gen_svg_string(
 
     // Add the cell contents
     let text_size_str = (opts.font_size * scaling).to_string();
-    for (vert_idxs, value) in shape.cell_verts.iter().zip_eq(assignment) {
+    for (vert_idxs, value) in shape.cells.iter().zip_eq(assignment) {
         if let Some(c) = *value {
             let mut sum = V2::new(0.0, 0.0);
             for idx in vert_idxs {

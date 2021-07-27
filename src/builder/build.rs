@@ -34,7 +34,7 @@ pub fn build(mut bdr: Builder) -> Result<(Shape, Symmetry), BuildError> {
     let shape = Shape {
         num_symbols: bdr.box_width * bdr.box_height,
         groups,
-        cell_verts: cells,
+        cells,
         verts: vert_positions,
     };
 

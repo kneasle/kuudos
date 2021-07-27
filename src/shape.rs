@@ -21,13 +21,13 @@ pub struct Shape {
     /// Each cell is a list of indices of vertices **in clockwise order**.  These will almost
     /// certainly have 4 vertices (and therefore sides), but leaving this generic allows Kuudos to
     /// handle other Sudoku shapes, such as those with hexagonal cells
-    pub(crate) cell_verts: CellVec<Vec<VertIdx>>,
+    pub(crate) cells: CellVec<Vec<VertIdx>>,
 }
 
 impl Shape {
     /// Returns the number of cells in this `Shape`
     pub fn num_cells(&self) -> usize {
-        self.cell_verts.len()
+        self.cells.len()
     }
 
     /// Returns the number of groups which are shared between two cells
@@ -52,7 +52,7 @@ impl Shape {
         // This allows the 2nd adjacent cell to figure out which edges it joins together
         let mut edges = HashMap::<(VertIdx, VertIdx), Edge>::new();
 
-        for (cell_idx, verts) in self.cell_verts.indexed_iter() {
+        for (cell_idx, verts) in self.cells.indexed_iter() {
             // Iterate over the edges of this cell in clockwise order (i.e. with this cell on the
             // **right** side of each edge).
             for (&vert_idx_bottom, &vert_idx_top) in verts.iter().circular_tuple_windows() {
@@ -202,7 +202,7 @@ impl Shape {
             num_symbols: grid_width,
             groups,
             verts,
-            cell_verts,
+            cells: cell_verts,
         }
     }
 
