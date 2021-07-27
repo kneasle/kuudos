@@ -10,6 +10,7 @@ use angle::{Angle, Deg};
 use itertools::Itertools;
 
 mod gen_shape;
+mod gen_svg;
 
 /// Re-export [`BuildError`] to the rest of the code.  This is then re-re-exported in `lib.rs`
 pub use gen_shape::BuildError;
@@ -202,7 +203,12 @@ impl Builder {
         rotate_vec(v, angle)
     }
 
-    /* Conversion to `Shape` */
+    /* Conversions */
+
+    /// Generates a debug-able SVG string representing the current state of `self`
+    pub fn as_svg(&self, scaling: f32) -> String {
+        gen_svg::gen_svg(self, scaling)
+    }
 
     /// Converts this `Builder` into a [`Shape`] and the associated [`Symmetry`]
     pub fn build(self) -> Result<(Shape, Symmetry), BuildError> {

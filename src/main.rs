@@ -22,6 +22,8 @@ fn main() {
             )
             .unwrap();
 
+        std::fs::write("bdr.svg", builder.as_svg(40.0)).unwrap();
+
         let (s, _symm) = builder.build().unwrap();
         let clues = vec![None; s.num_cells()];
         (s, clues)
