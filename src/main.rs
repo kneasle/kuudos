@@ -3,7 +3,7 @@ use itertools::Itertools;
 use kuudos::{
     solve::{clues_from_str, solve},
     svg::{gen_svg_string, RenderingOpts},
-    Builder, Shape, Side, V2,
+    Builder, Shape, Side, V2Ext, V2,
 };
 
 const VALUE_NAMES: &str = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
@@ -12,7 +12,7 @@ fn main() {
     let (shape, clues) = if true {
         // let s = Shape::star2x2(5, PI);
         let mut builder = Builder::new(3, 3, 3);
-        let b = builder.add_box_square(V2::new(0.0, -3.7), 1.0, Deg(-45.0));
+        let b = builder.add_box_square(V2::UP * 3.7, 1.0, Deg(-45.0));
         builder
             .connect_boxes(
                 b,

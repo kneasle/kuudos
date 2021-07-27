@@ -38,7 +38,7 @@ pub fn bbox(points: impl IntoIterator<Item = V2>) -> Option<(V2, V2)> {
 
 /// Compute the average of a set of vectors
 pub fn centroid(vs: impl IntoIterator<Item = V2>) -> Option<V2> {
-    let mut sum = V2::new(0.0, 0.0);
+    let mut sum = V2::ZERO;
     let mut num_elems = 0usize;
     for v in vs {
         sum += v;
@@ -52,17 +52,40 @@ pub fn centroid(vs: impl IntoIterator<Item = V2>) -> Option<V2> {
     }
 }
 
-/// Rotates a vector **clockwise** by an angle in radians
-pub fn rotate_vec(v: V2, angle: impl Angle<f32> + Copy) -> V2 {
-    let sin = angle.sin();
-    let cos = angle.cos();
-    // Rotation **clockwise** corresponds to multiplication by the following matrix (which looks
-    // like the classic anti-clockwise matrix because our y-axis goes down where the one in maths
-    // goes up):
-    // | cos(angle)  -sin(angle) |
-    // | sin(angle)   cos(angle) |
-    V2 {
-        x: v.x * cos - v.y * sin,
-        y: v.x * sin + v.y * cos,
+/// Extension trait to add more methods to [`V2`]
+pub trait V2Ext {
+    const ZERO: Self;
+    const ONE: Self;
+
+    const UP: Self;
+    const DOWN: Self;
+    const RIGHT: Self;
+    const LEFT: Self;
+
+    fn rotate(self, angle: impl Angle<f32> + Copy) -> Self;
+}
+
+impl V2Ext for V2 {
+    const ZERO: Self = V2 { x: 0.0, y: 0.0 };
+    const ONE: Self = V2 { x: 1.0, y: 1.0 };
+
+    const UP: Self = V2 { x: 0.0, y: -1.0 };
+    const DOWN: Self = V2 { x: 0.0, y: 1.0 };
+    const RIGHT: Self = V2 { x: 1.0, y: 0.0 };
+    const LEFT: Self = V2 { x: -1.0, y: 0.0 };
+
+    /// Rotates a vector **clockwise** by an angle in radians
+    fn rotate(self, angle: impl Angle<f32> + Copy) -> Self {
+        let sin = angle.sin();
+        let cos = angle.cos();
+        // Rotation **clockwise** corresponds to multiplication by the following matrix (which looks
+        // like the classic anti-clockwise matrix because our y-axis goes down where the one in maths
+        // goes up):
+        // | cos(angle)  -sin(angle) |
+        // | sin(angle)   cos(angle) |
+        V2 {
+            x: self.x * cos - self.y * sin,
+            y: self.x * sin + self.y * cos,
+        }
     }
 }

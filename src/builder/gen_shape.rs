@@ -685,29 +685,31 @@ fn angle_between(v1: V2, v2: V2) -> Rad<f32> {
 
 #[cfg(test)]
 mod tests {
-    use std::f32::consts::PI;
+    use std::fmt::Debug;
 
-    use angle::{Angle, Rad};
+    use angle::{Angle, Deg};
 
-    use crate::V2;
+    use crate::{V2Ext, V2};
 
     #[test]
     fn angle_between() {
-        fn check(v1: V2, v2: V2, exp_angle: f32) {
-            assert_eq!(super::angle_between(v1, v2).to_rad(), Rad(exp_angle));
+        fn check(v1: V2, v2: V2, exp_angle: impl Angle<f32> + Debug) {
+            assert_eq!(super::angle_between(v1, v2), exp_angle.to_rad());
         }
 
         // The angle from any direction to (any +ve scalar multiple of itself) is 0
-        check(V2::new(0.0, -1.0), V2::new(0.0, -1.0), 0.0);
-        check(V2::new(0.0, 1.0), V2::new(0.0, 1.0), 0.0);
-        check(V2::new(1.0, 1.0), V2::new(2.5, 2.5), 0.0);
-        // The angle from any direction to any -ve scalar multiple of itself is +PI
-        check(V2::new(0.0, 1.0), V2::new(0.0, -1.0), PI);
-        check(V2::new(1.0, -1.0), V2::new(-1.0, 1.0), PI);
+        check(V2::LEFT, V2::LEFT, Deg(0.0));
+        check(V2::DOWN, V2::DOWN, Deg(0.0));
+        check(V2::ONE, V2::ONE * 2.5, Deg(0.0));
+        // The angle from any direction to any -ve scalar multiple of itself is +180*
+        check(V2::DOWN, V2::UP, Deg(180.0));
+        check(V2::RIGHT, V2::LEFT, Deg(180.0));
+        check(V2::ONE, -V2::ONE, Deg(180.0));
+        check(V2::new(1.0, -1.0), V2::new(-1.0, 1.0), Deg(180.0));
 
-        check(V2::new(0.0, -1.0), V2::new(2.5, 0.0), PI / 2.0);
-        check(V2::new(0.0, 1.0), V2::new(2.5, 0.0), -PI / 2.0);
-        check(V2::new(0.0, 1.0), V2::new(-1.0, -1.0), 0.75 * PI);
-        check(V2::new(0.0, 1.0), V2::new(1.0, -1.0), -0.75 * PI);
+        check(V2::UP, V2::RIGHT * 2.5, Deg(90.0));
+        check(V2::DOWN, V2::RIGHT * 2.5, Deg(-90.0));
+        check(V2::DOWN, -V2::ONE, Deg(135.0));
+        check(V2::DOWN, V2::new(1.0, -1.0), Deg(-135.0));
     }
 }

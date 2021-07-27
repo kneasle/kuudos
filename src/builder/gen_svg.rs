@@ -1,6 +1,6 @@
 //! Code for converting a `Builder` into a debug-able SVG string
 
-use crate::{utils, V2};
+use crate::{utils, V2Ext, V2};
 
 use super::Builder;
 
@@ -22,9 +22,9 @@ pub fn gen_svg(bdr: &Builder, scaling: f32) -> String {
 
     let vert_positions = bdr.verts.map(|v| v.position);
     // This bounding box is in **untransformed** space
-    let (bbox_min, bbox_max) = utils::bbox(vert_positions.iter().copied())
-        .unwrap_or_else(|| (V2::new(0.0, 0.0), V2::new(0.0, 0.0)));
-    let padding_vec = V2::new(PADDING, PADDING);
+    let (bbox_min, bbox_max) =
+        utils::bbox(vert_positions.iter().copied()).unwrap_or_else(|| (V2::ZERO, V2::ZERO));
+    let padding_vec = V2::ONE * PADDING;
 
     let transform = |pt: &V2| (*pt - bbox_min + padding_vec) * scaling;
 

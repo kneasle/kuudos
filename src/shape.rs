@@ -4,7 +4,7 @@ use angle::Angle;
 use itertools::Itertools;
 
 use crate::types::{CellIdx, CellVec, IdxType, VertIdx, VertVec};
-use crate::{utils, Builder, V2};
+use crate::{utils, Builder, V2Ext, V2};
 
 /// The shape of a sudoku as accepted by Kuudos
 #[derive(Debug, Clone)]
@@ -189,9 +189,9 @@ impl Shape {
         // Create a new builder with 5-way rotational symmetry
         let mut builder = Builder::new(2, 2, num_points);
         // Create a new parallelogram box for the star's point
-        let down = V2::new(0.0, -1.0);
+        let down = V2::DOWN;
         let rotated_down = builder.rotate_point_by_steps(down, 1);
-        builder.add_box_parallelogram(V2::new(0.0, 0.0), down, rotated_down);
+        builder.add_box_parallelogram(V2::ZERO, down, rotated_down);
         // Rotate the built shape by the requested amount
         builder.rotate(base_angle);
         // Build the shape

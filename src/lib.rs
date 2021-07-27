@@ -9,6 +9,7 @@ mod utils;
 
 pub use builder::{Builder, Direction, Side};
 pub use shape::{Shape, Symmetry};
+pub use utils::V2Ext;
 
 /// Type alias for 2D floating point vectors (in the geometric sense, unlike [`Vec`])
 pub type V2 = Vector2D<f32>;

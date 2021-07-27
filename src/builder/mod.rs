@@ -2,8 +2,7 @@ use std::ops::Not;
 
 use crate::{
     types::{BoxIdx, BoxVec, SymmIdx, SymmVec, VertIdx, VertVec},
-    utils::rotate_vec,
-    Shape, Symmetry, V2,
+    Shape, Symmetry, V2Ext, V2,
 };
 
 use angle::{Angle, Deg};
@@ -76,12 +75,12 @@ impl Builder {
         // Vector from the centre of the unrotated box to its top-right corner
         let half_diagonal =
             V2::new(self.box_width as f32, -(self.box_height as f32)) * cell_size / 2.0;
-        let bottom_left = centre - rotate_vec(half_diagonal, angle);
+        let bottom_left = centre - half_diagonal.rotate(angle);
         self.add_box_parallelogram(
             bottom_left,
             // Up and right directions are also scaled and rotated
-            rotate_vec(V2::new(0.0, -1.0) * cell_size, angle),
-            rotate_vec(V2::new(1.0, 0.0) * cell_size, angle),
+            V2::UP.rotate(angle) * cell_size,
+            V2::RIGHT.rotate(angle) * cell_size,
         )
     }
 
@@ -160,7 +159,7 @@ impl Builder {
     pub fn rotate(&mut self, angle: impl Angle<f32> + Copy) {
         // Rotate all the vertices in-place
         for vert in self.verts.iter_mut() {
-            vert.position = rotate_vec(vert.position, angle);
+            vert.position = vert.position.rotate(angle);
         }
     }
 
@@ -200,7 +199,7 @@ impl Builder {
     /// Rotate a point by some number of rotation steps
     pub fn rotate_point_by_steps(&self, v: V2, num_factors: isize) -> V2 {
         let angle = Deg(360.0) * num_factors as f32 / self.rotational_symmetry_factor as f32;
-        rotate_vec(v, angle)
+        v.rotate(angle)
     }
 
     /* Conversions */
@@ -234,7 +233,7 @@ impl Builder {
         // add it once
         if new_pos.length_squared() < 0.00001 * 0.00001 {
             return self.verts.push(Vert {
-                position: V2::new(0.0, 0.0),
+                position: V2::ZERO,
                 equiv_class: VertEquivClass::Centre,
             });
         }

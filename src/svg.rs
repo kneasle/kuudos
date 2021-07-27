@@ -2,7 +2,7 @@ use itertools::Itertools;
 use rgb::RGB8;
 use simple_xml_builder::XMLElement;
 
-use crate::{utils, Shape, V2};
+use crate::{utils, Shape, V2Ext, V2};
 
 /// Write an empty sudoku grid to an SVG string
 pub fn gen_empty_svg_string(shape: &Shape, opts: &RenderingOpts, scaling: f32) -> String {
@@ -18,7 +18,7 @@ pub fn gen_svg_string(
 ) -> String {
     // This bounding box is in **untransformed** space
     let (bbox_min, bbox_max) = shape.bbox().expect("Shape should have at least one vertex");
-    let padding_vec = V2::new(opts.padding, opts.padding);
+    let padding_vec = V2::ONE * opts.padding;
 
     let transform = |pt: &V2| (*pt - bbox_min + padding_vec) * scaling;
 
