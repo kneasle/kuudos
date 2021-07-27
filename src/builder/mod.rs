@@ -6,11 +6,11 @@ use crate::{
 };
 
 /// Code for converting a `Builder` into a [`Shape`]/[`Symmetry`] pair
-mod build;
+mod gen_shape;
 
 use angle::{Angle, Deg};
 /// Re-export [`BuildError`] to the rest of the code.  This is then re-re-exported in `lib.rs`
-pub use build::BuildError;
+pub use gen_shape::BuildError;
 use itertools::Itertools;
 
 /// A struct for programmatically building complex `Shapes`
@@ -205,7 +205,7 @@ impl Builder {
 
     /// Converts this `Builder` into a [`Shape`] and the associated [`Symmetry`]
     pub fn build(self) -> Result<(Shape, Symmetry), BuildError> {
-        build::build(self)
+        gen_shape::build(self)
     }
 
     /* Internal helpers */
