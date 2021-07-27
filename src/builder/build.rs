@@ -1,15 +1,17 @@
 use std::{
     collections::{HashMap, HashSet},
     f32::consts::PI,
-    ops::Not,
 };
 
+use angle::{Angle, Rad};
 use itertools::Itertools;
 
 use crate::{
     types::{BoxIdx, CellIdx, CellVec, EdgeIdx, EdgeVec, VertIdx, VertVec},
     Builder, Shape, Symmetry, V2,
 };
+
+use super::{Direction, Side};
 
 /* FUNCTIONS TO EXPORT */
 
@@ -95,10 +97,11 @@ fn normalise_box_direction(bdr: &mut Builder) -> Result<(), BuildError> {
     // List of indices of boxes which need to be flipped (we can't flip them in the loop
     // without tripping the borrow checker)
     let mut anti_clockwise_box_idxs = Vec::<BoxIdx>::new();
-    for (box_idx, vert_idxs) in bdr.boxes.indexed_iter() {
+    for (box_idx, box_) in bdr.boxes.indexed_iter() {
         // Iterate over the positions of all consecutive triple of vertices, and classify that
         // corner according to its direction
-        let directions = vert_idxs
+        let directions = box_
+            .vert_idxs
             .iter()
             .map(|&idx| bdr.verts[idx].position)
             .circular_tuple_windows()
@@ -147,7 +150,7 @@ fn normalise_box_direction(bdr: &mut Builder) -> Result<(), BuildError> {
     // Reverse all the anti-clockwise boxes (by swapping the top-left and bottom-right
     // corners)
     for i in anti_clockwise_box_idxs {
-        bdr.boxes[i].swap(1, 3);
+        bdr.boxes[i].swap_direction();
     }
     Ok(())
 }
@@ -162,11 +165,11 @@ fn generate_edges(bdr: &Builder) -> Result<(EdgeVec<Edge>, BoxEdgeMap), BuildErr
     // not (the reverse of) the given edge has already been found, in which case we have found
     // the 2nd box of that `Edge`.
     let mut edge_map = HashMap::<(VertIdx, VertIdx), EdgeIdx>::new();
-    for (box_idx, vert_idxs) in bdr.boxes.indexed_iter() {
+    for (box_idx, box_) in bdr.boxes.indexed_iter() {
         // These indices will make the current box on the right of
         // `edges[(vert_idx_bottom, vert_idx_top)]`.
         for (side_idx, (&vert_idx_bottom, &vert_idx_top)) in
-            vert_idxs.iter().circular_tuple_windows().enumerate()
+            box_.vert_idxs.iter().circular_tuple_windows().enumerate()
         {
             // Which side of the box this edge is attaching to
             let side = match side_idx {
@@ -240,15 +243,16 @@ fn generate_cell_vertices(
     let mut cell_vert_indices = HashMap::<(BoxIdx, usize, usize), VertIdx>::new();
 
     // Add the box's vertices as cell vertices
-    for (box_idx, [bl_idx, tl_idx, tr_idx, br_idx]) in bdr.boxes.indexed_iter() {
+    for (box_idx, box_) in bdr.boxes.indexed_iter() {
+        let [bl_idx, tl_idx, tr_idx, br_idx] = box_.vert_idxs;
         // Single-letter variable names make the `insert` statements line up nicely, which I
         // think is a net increase in readability
         let w = bdr.box_width;
         let h = bdr.box_height;
-        cell_vert_indices.insert((box_idx, 0, 0), *bl_idx); // Bottom left
-        cell_vert_indices.insert((box_idx, 0, h), *tl_idx); // Top left
-        cell_vert_indices.insert((box_idx, w, h), *tr_idx); // Top right
-        cell_vert_indices.insert((box_idx, w, 0), *br_idx); // Bottom right
+        cell_vert_indices.insert((box_idx, 0, 0), bl_idx); // Bottom left
+        cell_vert_indices.insert((box_idx, 0, h), tl_idx); // Top left
+        cell_vert_indices.insert((box_idx, w, h), tr_idx); // Top right
+        cell_vert_indices.insert((box_idx, w, 0), br_idx); // Bottom right
     }
 
     // Add vertices down each edge, checking that boxes on either side of an edge agree on the
@@ -272,12 +276,13 @@ fn generate_cell_vertices(
     }
 
     // Add central vertices of each box
-    for (box_idx, [bl_idx, tl_idx, tr_idx, br_idx]) in bdr.boxes.indexed_iter() {
+    for (box_idx, box_) in bdr.boxes.indexed_iter() {
+        let [bl_idx, tl_idx, tr_idx, br_idx] = box_.vert_idxs;
         // Unpack the locations of the corner vertices
-        let bl_pos = bdr.verts[*bl_idx].position;
-        let tl_pos = bdr.verts[*tl_idx].position;
-        let tr_pos = bdr.verts[*tr_idx].position;
-        let br_pos = bdr.verts[*br_idx].position;
+        let bl_pos = bdr.verts[bl_idx].position;
+        let tl_pos = bdr.verts[tl_idx].position;
+        let tr_pos = bdr.verts[tr_idx].position;
+        let br_pos = bdr.verts[br_idx].position;
         // For each internal vertex coordinate
         for x in 1..=bdr.box_width - 1 {
             for y in 1..=bdr.box_height - 1 {
@@ -592,8 +597,9 @@ enum CornerType {
 }
 
 impl CornerType {
-    fn classify(angle: f32) -> CornerType {
-        if angle.abs() < 0.001 || angle.abs() > 2.0 * PI - 0.001 {
+    fn classify(a: impl Angle<f32>) -> CornerType {
+        let angle = a.to_deg().0;
+        if angle.abs() < 0.001 || angle.abs() > 360.0 - 0.001 {
             // If the angle is close to 0 or 180 degrees, we call the corner 'linear'
             CornerType::Linear
         } else if angle > 0.0 {
@@ -637,52 +643,6 @@ struct Edge {
     box_side_right: Side,
 }
 
-/// The possible directions through a box
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-enum Direction {
-    Horizontal,
-    Vertical,
-}
-
-impl Not for Direction {
-    type Output = Direction;
-
-    fn not(self) -> Self::Output {
-        match self {
-            Direction::Vertical => Direction::Horizontal,
-            Direction::Horizontal => Direction::Vertical,
-        }
-    }
-}
-
-/// The possible each edges of each box
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-enum Side {
-    Left,
-    Top,
-    Right,
-    Bottom,
-}
-
-impl Side {
-    /// The direction of the `Edge`'s **line**
-    fn direction(self) -> Direction {
-        match self {
-            Side::Left | Side::Right => Direction::Vertical,
-            Side::Top | Side::Bottom => Direction::Horizontal,
-        }
-    }
-
-    fn opposite(self) -> Side {
-        match self {
-            Side::Left => Side::Right,
-            Side::Top => Side::Bottom,
-            Side::Right => Side::Left,
-            Side::Bottom => Side::Top,
-        }
-    }
-}
-
 /// The two sides of an edge (assuming that the edge is pointing 'up')
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 enum EdgeSide {
@@ -701,7 +661,7 @@ impl EdgeSide {
 
 /// The angle (going **clockwise**) between the directions of two vectors.  This is always in the
 /// region `-PI < x <= PI`.
-fn angle_between(v1: V2, v2: V2) -> f32 {
+fn angle_between(v1: V2, v2: V2) -> Rad<f32> {
     // The clockwise angle from the x-axis to the direction of `v1` and `v2`
     let angle1 = f32::atan2(v1.y, v1.x);
     let angle2 = f32::atan2(v2.y, v2.x);
@@ -718,19 +678,21 @@ fn angle_between(v1: V2, v2: V2) -> f32 {
         angle_diff += PI * 2.0;
     }
 
-    angle_diff
+    Rad(angle_diff)
 }
 
 #[cfg(test)]
 mod tests {
     use std::f32::consts::PI;
 
+    use angle::{Angle, Rad};
+
     use crate::V2;
 
     #[test]
     fn angle_between() {
         fn check(v1: V2, v2: V2, exp_angle: f32) {
-            assert_eq!(super::angle_between(v1, v2), exp_angle);
+            assert_eq!(super::angle_between(v1, v2).to_rad(), Rad(exp_angle));
         }
 
         // The angle from any direction to (any +ve scalar multiple of itself) is 0

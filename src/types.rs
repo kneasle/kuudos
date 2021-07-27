@@ -164,6 +164,7 @@ idx_impl!(BoxIdx, BoxVec);
 idx_impl!(CellIdx, CellVec);
 idx_impl!(EdgeIdx, EdgeVec);
 idx_impl!(VertIdx, VertVec);
+idx_impl!(SymmIdx, SymmVec);
 
 /// A common trait implemented by all custom index types
 pub trait IdxType {

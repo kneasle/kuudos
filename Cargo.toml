@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
+angle = "0.4"
 itertools = "0.10"
 rgb = "0.8.27"
 simple-xml-builder = "1.0"

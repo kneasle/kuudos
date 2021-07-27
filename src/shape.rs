@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use angle::Angle;
 use itertools::Itertools;
 
 use crate::types::{CellIdx, CellVec, IdxType, VertIdx, VertVec};
@@ -207,7 +208,7 @@ impl Shape {
 
     /// Create a star with a 2x2 diamond-shaped box under each point.  `Shape::star2x2(4, 0)` is
     /// equivalent to `Shape::square(2, 2)`.
-    pub fn star2x2(num_points: usize, base_angle: f32) -> Shape {
+    pub fn star2x2(num_points: usize, base_angle: impl Angle<f32> + Copy) -> Shape {
         // Create a new builder with 5-way rotational symmetry
         let mut builder = Builder::new(2, 2, num_points);
         // Create a new parallelogram box for the star's point
