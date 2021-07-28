@@ -4,11 +4,6 @@ use simple_xml_builder::XMLElement;
 
 use crate::{utils, Shape, V2Ext, V2};
 
-/// Write an empty sudoku grid to an SVG string
-pub fn gen_empty_svg_string(shape: &Shape, opts: &RenderingOpts, scaling: f32) -> String {
-    gen_svg_string(shape, opts, scaling, &vec![None; shape.num_cells()])
-}
-
 /// Write a populated sudoku grid to an SVG string
 pub fn gen_svg_string(
     shape: &Shape,

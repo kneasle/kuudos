@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 use itertools::Itertools;
 
 use crate::{
-    types::{CellIdx, CellVec, IdxType},
+    indexed_vec::{CellIdx, CellVec, IdxType},
     Shape,
 };
 

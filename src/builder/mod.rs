@@ -1,7 +1,7 @@
 use std::ops::Not;
 
 use crate::{
-    types::{BoxIdx, BoxVec, LinkIdx, LinkVec, SymmIdx, SymmVec, VertIdx, VertVec},
+    indexed_vec::{BoxIdx, BoxVec, LinkIdx, LinkVec, SymmIdx, SymmVec, VertIdx, VertVec},
     Shape, Symmetry, V2Ext, V2,
 };
 
@@ -9,7 +9,7 @@ use angle::{Angle, Deg};
 use itertools::Itertools;
 
 mod gen_shape;
-mod gen_svg;
+mod svg;
 
 /// Re-export [`BuildError`] to the rest of the code.  This is then re-re-exported in `lib.rs`
 pub use gen_shape::BuildError;
@@ -298,7 +298,7 @@ impl Builder {
 
     /// Generates a debug-able SVG string representing the current state of `self`
     pub fn as_svg(&self, scaling: f32) -> String {
-        gen_svg::gen_svg(self, scaling)
+        svg::gen_svg(self, scaling)
     }
 
     /// Converts this `Builder` into a [`Shape`] and the associated [`Symmetry`]

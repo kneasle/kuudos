@@ -3,8 +3,13 @@ use std::collections::HashMap;
 use angle::Angle;
 use itertools::Itertools;
 
-use crate::types::{CellIdx, CellVec, IdxType, VertIdx, VertVec};
+use crate::indexed_vec::{CellIdx, CellVec, IdxType, VertIdx, VertVec};
 use crate::{builder::Builder, utils, V2Ext, V2};
+
+pub(crate) mod svg;
+
+// Re-export `RenderingOpts`
+pub use svg::RenderingOpts;
 
 /// The shape of a sudoku as accepted by Kuudos
 #[derive(Debug, Clone)]
@@ -28,6 +33,22 @@ impl Shape {
     /// Returns the number of cells in this `Shape`
     pub fn num_cells(&self) -> usize {
         self.cells.len()
+    }
+
+    /// Write an empty sudoku grid to an SVG string
+    pub fn svg_string_empty(&self, opts: &RenderingOpts, scaling: f32) -> String {
+        self.svg_string(opts, scaling, &vec![None; self.num_cells()])
+    }
+
+    /// Generate an SVG string of a puzzle which has this `Shape`
+    pub fn svg_string(
+        &self,
+        opts: &RenderingOpts,
+        scaling: f32,
+        assignment: &[Option<char>],
+    ) -> String {
+        // Delegate to the `svg` module
+        svg::gen_svg_string(self, opts, scaling, assignment)
     }
 
     /// Returns the number of groups which are shared between two cells

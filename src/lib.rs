@@ -1,10 +1,9 @@
 use vector2d::Vector2D;
 
 pub mod builder;
-mod shape;
+mod indexed_vec;
+pub mod shape;
 pub mod solve;
-pub mod svg;
-mod types;
 mod utils;
 
 pub use builder::{Direction, Side};

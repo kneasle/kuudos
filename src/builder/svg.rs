@@ -1,7 +1,7 @@
 //! Code for converting a `Builder` into a debug-able SVG string
 
 use crate::{
-    types::{BoxIdx, VertVec},
+    indexed_vec::{BoxIdx, VertVec},
     utils::{self, circle_passing_through},
     Side, V2Ext, V2,
 };

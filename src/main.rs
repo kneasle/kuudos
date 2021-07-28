@@ -4,8 +4,8 @@ use angle::Deg;
 use itertools::Itertools;
 use kuudos::{
     builder::{Builder, EdgeLinkStyle},
+    shape::RenderingOpts,
     solve::{clues_from_str, solve},
-    svg::{gen_svg_string, RenderingOpts},
     Shape, Side, V2Ext, V2,
 };
 
@@ -35,8 +35,7 @@ fn main() {
     let display_type = DisplayType::Solution;
 
     // Write the shape to an SVG file
-    let svg = gen_svg_string(
-        &shape,
+    let svg = shape.svg_string(
         &RenderingOpts::default(),
         40.0,
         // Label the cells with alpha-numeric characters

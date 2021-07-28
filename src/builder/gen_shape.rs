@@ -9,7 +9,7 @@ use angle::{Angle, Rad};
 use itertools::Itertools;
 
 use crate::{
-    types::{BoxIdx, CellIdx, CellVec, EdgeIdx, EdgeVec, VertIdx, VertVec},
+    indexed_vec::{BoxIdx, CellIdx, CellVec, EdgeIdx, EdgeVec, VertIdx, VertVec},
     Shape, Symmetry, V2,
 };
 
