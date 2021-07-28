@@ -1,13 +1,13 @@
 use vector2d::Vector2D;
 
-mod builder;
+pub mod builder;
 mod shape;
 pub mod solve;
 pub mod svg;
 mod types;
 mod utils;
 
-pub use builder::{Builder, Direction, Side};
+pub use builder::{Direction, Side};
 pub use shape::{Shape, Symmetry};
 pub use utils::V2Ext;
 

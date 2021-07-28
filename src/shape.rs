@@ -4,7 +4,7 @@ use angle::Angle;
 use itertools::Itertools;
 
 use crate::types::{CellIdx, CellVec, IdxType, VertIdx, VertVec};
-use crate::{utils, Builder, V2Ext, V2};
+use crate::{builder::Builder, utils, V2Ext, V2};
 
 /// The shape of a sudoku as accepted by Kuudos
 #[derive(Debug, Clone)]

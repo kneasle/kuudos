@@ -3,9 +3,10 @@
 use angle::Deg;
 use itertools::Itertools;
 use kuudos::{
+    builder::{Builder, EdgeLinkStyle},
     solve::{clues_from_str, solve},
     svg::{gen_svg_string, RenderingOpts},
-    Builder, Shape, Side, V2Ext, V2,
+    Shape, Side, V2Ext, V2,
 };
 
 const VALUE_NAMES: &str = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
@@ -70,13 +71,44 @@ enum DisplayType {
 fn nine_mens_morris() -> Builder {
     let mut bdr = Builder::new(3, 3, 4);
 
+    // Add line(s) of connected cells
     let line_box_1 = bdr.add_box_square(V2::UP * 3.0, 1.0, Deg(0.0));
     let line_box_2 = bdr.extrude_edge(line_box_1, Side::Top).unwrap();
     let line_box_3 = bdr.extrude_edge(line_box_2, Side::Top).unwrap();
-
-    let corner_box1 = bdr.add_box_square(V2::ONE * 3.0, 1.0, Deg(0.0));
-    let corner_box2 = bdr.add_box_square(V2::ONE * 6.0, 1.0, Deg(0.0));
-    let corner_box3 = bdr.add_box_square(V2::ONE * 9.0, 1.0, Deg(0.0));
+    // Add diagonal line(s) of 'floating' cells
+    let up_right = V2::UP + V2::RIGHT;
+    bdr.add_box_square(up_right * 3.0, 1.0, Deg(0.0));
+    let corner_box_2 = bdr.add_box_square(up_right * 6.0, 1.0, Deg(0.0));
+    let corner_box_3 = bdr.add_box_square(up_right * 9.0, 1.0, Deg(0.0));
+    // Link the lines of boxes
+    bdr.link_edges(
+        line_box_2,
+        Side::Right,
+        corner_box_2,
+        Side::Left,
+        EdgeLinkStyle::Linear,
+    );
+    bdr.link_edges(
+        line_box_3,
+        Side::Right,
+        corner_box_3,
+        Side::Left,
+        EdgeLinkStyle::Linear,
+    );
+    bdr.link_edges(
+        corner_box_2,
+        Side::Bottom,
+        bdr.rotational_copy_of(line_box_2, 1).unwrap(),
+        Side::Left,
+        EdgeLinkStyle::Linear,
+    );
+    bdr.link_edges(
+        corner_box_3,
+        Side::Bottom,
+        bdr.rotational_copy_of(line_box_3, 1).unwrap(),
+        Side::Left,
+        EdgeLinkStyle::Linear,
+    );
 
     bdr
 }
@@ -89,6 +121,14 @@ fn race_track() -> Builder {
     let hex_box = bdr.add_box_parallelogram(V2::ZERO, V2::UP, bdr.rotate_point_by_steps(V2::UP, 1));
     // Extrude a square face off one side
     let outer_box = bdr.extrude_edge(hex_box, Side::Top).unwrap();
+    // Link the outer boxes together
+    bdr.link_edges(
+        outer_box,
+        Side::Right,
+        bdr.rotational_copy_of(outer_box, 1).unwrap(),
+        Side::Left,
+        EdgeLinkStyle::Arc,
+    );
 
     // Rotate the hexagon so that the side we extruded faces upwards
     bdr.rotate(Deg(-30.0));
@@ -99,7 +139,7 @@ fn triangle() -> Builder {
     let mut builder = Builder::new(3, 3, 3);
     let b = builder.add_box_square(V2::UP * 3.7, 1.0, Deg(-45.0));
     builder
-        .connect_edges(
+        .connect_edges_with_box(
             b,
             Side::Bottom,
             builder.rotational_copy_of(b, 1).unwrap(),

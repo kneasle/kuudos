@@ -10,10 +10,10 @@ use itertools::Itertools;
 
 use crate::{
     types::{BoxIdx, CellIdx, CellVec, EdgeIdx, EdgeVec, VertIdx, VertVec},
-    Builder, Shape, Symmetry, V2,
+    Shape, Symmetry, V2,
 };
 
-use super::{Direction, Side};
+use super::{Builder, Direction, Side};
 
 /* FUNCTIONS TO EXPORT */
 

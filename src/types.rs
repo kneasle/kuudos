@@ -161,11 +161,12 @@ macro_rules! idx_impl {
     };
 }
 
-idx_impl!(BoxIdx, BoxVec);
-idx_impl!(CellIdx, CellVec);
-idx_impl!(EdgeIdx, EdgeVec);
-idx_impl!(VertIdx, VertVec);
-idx_impl!(SymmIdx, SymmVec);
+idx_impl!(BoxIdx, BoxVec); // Collection of boxes of cells
+idx_impl!(CellIdx, CellVec); // Collection of cells
+idx_impl!(EdgeIdx, EdgeVec); // Collection of edges between either boxes or cells
+idx_impl!(VertIdx, VertVec); // Collection of vertices of either boxes or cells (or both)
+idx_impl!(SymmIdx, SymmVec); // Collection of equivalence classes
+idx_impl!(LinkIdx, LinkVec); // Collection of links between edges
 
 /// A common trait implemented by all custom index types
 pub trait IdxType {

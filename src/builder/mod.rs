@@ -1,7 +1,7 @@
 use std::ops::Not;
 
 use crate::{
-    types::{BoxIdx, BoxVec, SymmIdx, SymmVec, VertIdx, VertVec},
+    types::{BoxIdx, BoxVec, LinkIdx, LinkVec, SymmIdx, SymmVec, VertIdx, VertVec},
     Shape, Symmetry, V2Ext, V2,
 };
 
@@ -33,6 +33,10 @@ pub struct Builder {
     /// The number given to the next vertex equivalence class
     next_equiv_class: usize,
 
+    /// Each link joins two edges which don't touch each other.  These allow us to space out the
+    /// boxes further, and allows for many more shapes
+    edge_links: LinkVec<EdgeLink>,
+
     /// The boxes added to the shape so far.  These arrays store the vertex indices going clockwise
     /// from the 'bottom left' of the box.  In reality, it's totally fine for people to rotate or
     /// reflect boxes (thus moving the 'bottom left' corner to some other direction), but this way
@@ -57,6 +61,8 @@ impl Builder {
 
             verts: VertVec::new(),
             next_equiv_class: 0,
+
+            edge_links: LinkVec::new(),
 
             boxes: BoxVec::new(),
             box_equiv_classes: SymmVec::new(),
@@ -111,7 +117,7 @@ impl Builder {
 
     /// Connect the edges of two (different) boxes with a new box
     #[must_use]
-    pub fn connect_edges(
+    pub fn connect_edges_with_box(
         &mut self,
         top_box_idx: BoxIdx,
         top_edge: Side,
@@ -188,6 +194,54 @@ impl Builder {
         let idx_of_original_box = box_idxs[0];
         assert_eq!(self.box_equiv_classes.push(box_idxs), equiv_class_idx);
         idx_of_original_box
+    }
+
+    /* Add edge links */
+
+    /// Add an explicit link between two (non-adjacent) edges
+    pub fn link_edges(
+        &mut self,
+        start_box_idx: BoxIdx,
+        start_side: Side,
+        end_box_idx: BoxIdx,
+        end_side: Side,
+        style: EdgeLinkStyle,
+    ) -> Option<LinkIdx> {
+        // Generate all the rotational copies of the edge index, collecting them in a vec to avoid
+        // borrowing `self` twice
+        let start_box_idxs = self.equiv_box_iter(start_box_idx)?;
+        let end_box_idxs = self.equiv_box_iter(end_box_idx)?;
+        let links = start_box_idxs
+            .zip_eq(end_box_idxs)
+            .map(|(s_box_idx, e_box_idx)| EdgeLink {
+                start_box_idx: s_box_idx,
+                start_side,
+                end_box_idx: e_box_idx,
+                end_side,
+                style,
+            })
+            .collect_vec();
+
+        // Add the links
+        let first_link_idx = self.edge_links.next_idx();
+        for link in links {
+            self.edge_links.push(link);
+        }
+        Some(first_link_idx)
+    }
+
+    /// Gets an iterator over the equivalent boxes
+    fn equiv_box_iter<'s>(&'s self, box_idx: BoxIdx) -> Option<impl Iterator<Item = BoxIdx> + 's> {
+        let box_ = self.boxes.get(box_idx)?;
+        let equiv_class = self.box_equiv_classes.get(box_.equiv_class).unwrap();
+        let iter = equiv_class
+            .iter()
+            .copied()
+            // Start the iterator at the box's index
+            .cycle()
+            .skip(box_.rotation_within_equiv_class)
+            .take(equiv_class.len());
+        Some(iter)
     }
 
     /* Modifiers (i.e. functions which mutate the existing shape) */
@@ -309,6 +363,32 @@ impl Builder {
     }
 }
 
+//////////////////////////
+// ELEMENTS OF BUILDERS //
+//////////////////////////
+
+/// A link between two non-overlapping edges
+#[derive(Debug, Clone)]
+struct EdgeLink {
+    // Starting edge
+    start_box_idx: BoxIdx,
+    start_side: Side,
+    // End edge
+    end_box_idx: BoxIdx,
+    end_side: Side,
+    // What shape this link should take
+    style: EdgeLinkStyle,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum EdgeLinkStyle {
+    /// Draw a circular arc between the edges
+    Arc,
+    /// Draw a straight line between the edges
+    Linear,
+}
+
+/// A box of cells
 #[derive(Debug, Clone)]
 struct Box_ {
     /// The indices of the vertices of this corner.  These are defined to be listed in clockwise
@@ -343,6 +423,7 @@ impl Box_ {
     }
 }
 
+/// A vertex at the corner of at least one box
 #[derive(Debug, Clone, Copy)]
 struct Vert {
     /// The position of this vertex in 2D space
@@ -366,6 +447,10 @@ enum VertEquivClass {
         equiv_rotation: usize,
     },
 }
+
+////////////////////////
+// UTILITY DATA TYPES //
+////////////////////////
 
 /// The possible directions an edge can face
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
