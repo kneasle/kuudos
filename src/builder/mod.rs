@@ -149,7 +149,7 @@ impl Builder {
     /// Adds a new box which extends outwards from a given edge
     #[must_use]
     pub fn extrude_edge(&mut self, box_idx: BoxIdx, side: Side) -> Result<BoxIdx, BoxAddError> {
-        self.extrude_edge_with_opts(box_idx, side, 1.0)
+        self.extrude_edge_with_opts(box_idx, side, 1.0, None)
     }
 
     /// Adds a new box which extends outwards from a given edge, with extra options
@@ -159,6 +159,7 @@ impl Builder {
         box_idx: BoxIdx,
         side: Side,
         extruded_cell_height: f32,
+        link_height: Option<f32>,
     ) -> Result<BoxIdx, BoxAddError> {
         // Extract the vertices of the side being extruded
         let box_ = self
@@ -168,13 +169,25 @@ impl Builder {
         let (vert_idx1, vert_idx2) = box_.get_edge_verts(side);
         let v1 = self.verts.get(vert_idx1).unwrap().position;
         let v2 = self.verts.get(vert_idx2).unwrap().position;
-
+        // Compute (indirectly) the up and right directions for the new box
         let edge_direction = v2 - v1; // Vector pointing down the full length of the edge
         let normal = -edge_direction.normal().normalise(); // Points outwards from the edge
         let edge_direction_per_cell =
             edge_direction / self.box_size_in_direction(side.direction()) as f32;
-
-        self.add_box_parallelogram(v1, normal * extruded_cell_height, edge_direction_per_cell)
+        // Create a new box at the right distance from the source box
+        let bottom_left_corner = v1 + normal * link_height.unwrap_or(0.0);
+        let new_box = self.add_box_parallelogram(
+            bottom_left_corner,
+            normal * extruded_cell_height,
+            edge_direction_per_cell,
+        )?;
+        // Add an edge link, if needed
+        if link_height.is_some() {
+            self.link_edges(box_idx, side, new_box, Side::Bottom, EdgeLinkStyle::Linear)
+                .unwrap();
+        }
+        // Return the new box
+        Ok(new_box)
     }
 
     /// Adds a new box to the shape, given 4 arbitrary vertices
