@@ -1,41 +1,11 @@
 //! Miscellaneous utility functions, usually geometric operations.
 
+use std::{cmp::Ordering, f32::consts::PI};
+
 use crate::V2;
 
 use angle::{Angle, Rad};
 use num_complex::Complex32;
-
-/// Returns the bounding box of a set of points as a (min, max) pair of vectors.  Returns `None` if
-/// the iterator didn't yield any points.
-pub fn bbox(points: impl IntoIterator<Item = V2>) -> Option<(V2, V2)> {
-    let mut is_iter_empty = true;
-    // If the shape has no vertices, then the bounding box isn't defined
-    let mut min_x = f32::MAX;
-    let mut min_y = f32::MAX;
-    let mut max_x = f32::MIN;
-    let mut max_y = f32::MIN;
-    for v in points {
-        is_iter_empty = false;
-        if v.x < min_x {
-            min_x = v.x;
-        }
-        if v.y < min_y {
-            min_y = v.y;
-        }
-        if v.x > max_x {
-            max_x = v.x;
-        }
-        if v.y > max_y {
-            max_y = v.y;
-        }
-    }
-    if is_iter_empty {
-        // If the iterator yielded no elements, then the bbox is not defined
-        None
-    } else {
-        Some((V2::new(min_x, min_y), V2::new(max_x, max_y)))
-    }
-}
 
 /// Compute the average of a set of vectors
 pub fn centroid(vs: impl IntoIterator<Item = V2>) -> Option<V2> {
@@ -51,6 +21,28 @@ pub fn centroid(vs: impl IntoIterator<Item = V2>) -> Option<V2> {
     } else {
         Some(sum / num_elems as f32)
     }
+}
+
+/// The angle (going **clockwise**) between the directions of two vectors.  This is always in the
+/// region `-PI < x <= PI`.
+pub fn angle_between(v1: V2, v2: V2) -> Rad<f32> {
+    // The clockwise angle from the x-axis to the direction of `v1` and `v2`
+    let angle1 = f32::atan2(v1.y, v1.x);
+    let angle2 = f32::atan2(v2.y, v2.x);
+
+    let mut angle_diff = angle2 - angle1;
+    // Rotate angle_diff into the range `-2 * PI <= x < 2 * PI`
+    angle_diff %= PI * 2.0;
+    // If the absolute difference is bigger than PI (i.e. >180 degrees) then rotate it back into
+    // the range `-PI < x <= PI`
+    if angle_diff > PI {
+        angle_diff -= PI * 2.0;
+    }
+    if angle_diff <= -PI {
+        angle_diff += PI * 2.0;
+    }
+
+    Rad(angle_diff)
 }
 
 /// Computes the centre and radius of the circle which passes through `p1` with tangent `tang_1`,
@@ -245,5 +237,158 @@ impl V2Ext for V2 {
             x: self.x * cos - self.y * sin,
             y: self.x * sin + self.y * cos,
         }
+    }
+}
+
+/// An axis-aligned 2D rectangle
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Rect2 {
+    min: V2,
+    max: V2,
+}
+
+#[allow(dead_code)]
+impl Rect2 {
+    /* CONSTRUCTORS */
+
+    pub fn from_min_max(min: V2, max: V2) -> Self {
+        Self { min, max }
+    }
+
+    pub fn from_min_size(min: V2, size: V2) -> Self {
+        Self {
+            min,
+            max: min + size,
+        }
+    }
+
+    pub fn from_centre_size(centre: V2, size: V2) -> Self {
+        Self {
+            min: centre - size * 0.5,
+            max: centre + size * 0.5,
+        }
+    }
+
+    /// Creates a zero-size [`Rect2`] at a given point
+    pub fn point(pt: V2) -> Self {
+        Self::from_min_size(pt, V2::ZERO)
+    }
+
+    /// Returns the bounding box of a set of points.  Returns `None` if the iterator yields no
+    /// points.
+    pub fn bbox(points: impl IntoIterator<Item = V2>) -> Option<Self> {
+        let mut point_iter = points.into_iter();
+
+        let mut bbox = Self::point(point_iter.next()?);
+        for pt in point_iter {
+            bbox.expand_to_include(pt);
+        }
+        Some(bbox)
+    }
+
+    /* GETTERS */
+
+    pub fn min(self) -> V2 {
+        self.min
+    }
+
+    pub fn max(self) -> V2 {
+        self.max
+    }
+
+    pub fn size(self) -> V2 {
+        self.max - self.min
+    }
+
+    pub fn centre(self) -> V2 {
+        V2::lerp(self.min, self.max, 0.5)
+    }
+
+    /* OPERATIONS */
+
+    /// Creates a `Rect2` that contains both `self` and `other`
+    pub fn union(self, other: Rect2) -> Self {
+        Self {
+            min: min_v2(self.min, other.min),
+            max: max_v2(self.max, other.max),
+        }
+    }
+
+    /// Creates a `Rect2` that contains both `self` and `other`
+    pub fn union_iter(rects: impl IntoIterator<Item = Rect2>) -> Option<Self> {
+        let mut rect_iter = rects.into_iter();
+
+        let mut combined_union = rect_iter.next()?;
+        for rect in rect_iter {
+            combined_union = combined_union.union(rect);
+        }
+        Some(combined_union)
+    }
+
+    /// Expands `self` to so that it contains some point
+    pub fn expand_to_include(&mut self, pt: V2) {
+        self.min = min_v2(self.min, pt);
+        self.max = max_v2(self.max, pt);
+    }
+}
+
+/// Component-wise min of two vectors
+pub fn min_v2(a: V2, b: V2) -> V2 {
+    V2::new(min_f32(a.x, b.x), min_f32(a.y, b.y))
+}
+
+/// Component-wise max of two vectors
+pub fn max_v2(a: V2, b: V2) -> V2 {
+    V2::new(max_f32(a.x, b.x), max_f32(a.y, b.y))
+}
+
+/// Returns the smaller of `a` and `b`, panicking if either are NaN
+pub fn min_f32(a: f32, b: f32) -> f32 {
+    match a.partial_cmp(&b) {
+        Some(Ordering::Less) => a,
+        Some(Ordering::Equal) => a,
+        Some(Ordering::Greater) => b,
+        None => panic!(),
+    }
+}
+
+/// Returns the smaller of `a` and `b`, panicking if either are NaN
+pub fn max_f32(a: f32, b: f32) -> f32 {
+    match a.partial_cmp(&b) {
+        Some(Ordering::Less) => b,
+        Some(Ordering::Equal) => a,
+        Some(Ordering::Greater) => a,
+        None => panic!(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fmt::Debug;
+
+    use angle::{Angle, Deg};
+
+    use crate::{V2Ext, V2};
+
+    #[test]
+    fn angle_between() {
+        fn check(v1: V2, v2: V2, exp_angle: impl Angle<f32> + Debug) {
+            assert_eq!(super::angle_between(v1, v2), exp_angle.to_rad());
+        }
+
+        // The angle from any direction to (any +ve scalar multiple of itself) is 0
+        check(V2::LEFT, V2::LEFT, Deg(0.0));
+        check(V2::DOWN, V2::DOWN, Deg(0.0));
+        check(V2::ONE, V2::ONE * 2.5, Deg(0.0));
+        // The angle from any direction to any -ve scalar multiple of itself is +180*
+        check(V2::DOWN, V2::UP, Deg(180.0));
+        check(V2::RIGHT, V2::LEFT, Deg(180.0));
+        check(V2::ONE, -V2::ONE, Deg(180.0));
+        check(V2::new(1.0, -1.0), V2::new(-1.0, 1.0), Deg(180.0));
+
+        check(V2::UP, V2::RIGHT * 2.5, Deg(90.0));
+        check(V2::DOWN, V2::RIGHT * 2.5, Deg(-90.0));
+        check(V2::DOWN, -V2::ONE, Deg(135.0));
+        check(V2::DOWN, V2::new(1.0, -1.0), Deg(-135.0));
     }
 }

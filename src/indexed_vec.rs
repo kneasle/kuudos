@@ -3,6 +3,7 @@
 //! its own replacement for [`Vec`], which can only be indexed by its corresponding index type.
 
 use std::{
+    fmt::{Debug, Formatter},
     marker::PhantomData,
     ops::{Index, IndexMut},
 };
@@ -142,7 +143,7 @@ impl<IdxT: IdxType, T> IndexMut<IdxT> for TypedVec<IdxT, T> {
 macro_rules! idx_impl {
     ($idx_name: ident, $vec_name: ident) => {
         /// An index type used for referring to vertices
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub struct $idx_name {
             idx: usize,
         }
@@ -158,6 +159,12 @@ macro_rules! idx_impl {
         }
 
         pub type $vec_name<T> = TypedVec<$idx_name, T>;
+
+        impl Debug for $idx_name {
+            fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+                write!(f, "{}({})", stringify!($idx_name), self.idx)
+            }
+        }
     };
 }
 

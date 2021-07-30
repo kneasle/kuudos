@@ -2,7 +2,8 @@ use itertools::Itertools;
 use rgb::RGB8;
 use simple_xml_builder::XMLElement;
 
-use crate::{utils, Shape, V2Ext, V2};
+use super::{DrawElement, LinkShape, Shape};
+use crate::{utils, V2Ext, V2};
 
 /// Write a populated sudoku grid to an SVG string
 pub fn gen_svg_string(
@@ -12,21 +13,26 @@ pub fn gen_svg_string(
     assignment: &[Option<char>],
 ) -> String {
     // This bounding box is in **untransformed** space
-    let (bbox_min, bbox_max) = shape.bbox().expect("Shape should have at least one vertex");
+    let bbox = shape.bbox().expect("Shape can't have no vertices");
     let padding_vec = V2::ONE * opts.padding;
 
-    let transform = |pt: &V2| (*pt - bbox_min + padding_vec) * scaling;
+    let transform = |pt: &V2| (*pt - bbox.min() + padding_vec) * scaling;
 
     // Transform the vertices so that their min-point is (padding, padding) and they're scaled up
     // by the `scaling` factor
     let transformed_verts = shape.verts.map(transform);
     // Compute the dimensions of the resulting SVG image
-    let img_dimensions = (bbox_max - bbox_min + padding_vec * 2.0) * scaling;
+    let img_dimensions = (bbox.max() - bbox.min() + padding_vec * 2.0) * scaling;
 
     // Root SVG element
     let mut root = XMLElement::new("svg");
     root.add_attribute("width", &img_dimensions.x.to_string());
     root.add_attribute("height", &img_dimensions.y.to_string());
+
+    // Add extra elements behind the cells
+    for elem in &shape.extra_elements {
+        root.add_child(extra_elem_to_svg(elem, padding_vec - bbox.min(), scaling));
+    }
 
     // Add the cell backgrounds
     for vert_idxs in shape.cells.iter() {
@@ -128,6 +134,42 @@ pub fn gen_svg_string(
     }
 
     root.to_string()
+}
+
+/// Helper function to generate an [`XMLElement`] to represent a given [`DrawElement`]
+fn extra_elem_to_svg(elem: &DrawElement, translation: V2, scaling: f32) -> XMLElement {
+    match elem {
+        DrawElement::EdgeLink(shape) => {
+            let mut xml_elem = match shape.transform(translation, scaling) {
+                LinkShape::Line(p1, p2) => {
+                    let mut elem = XMLElement::new("line");
+                    elem.add_attribute("x1", &p1.x.to_string());
+                    elem.add_attribute("y1", &p1.y.to_string());
+                    elem.add_attribute("x2", &p2.x.to_string());
+                    elem.add_attribute("y2", &p2.y.to_string());
+                    elem
+                }
+                LinkShape::CircularArc {
+                    centre,
+                    radius,
+                    start_angle,
+                    end_angle,
+                } => {
+                    let mut elem = XMLElement::new("path");
+                    elem.add_attribute(
+                        "d",
+                        &utils::svg_circle_arc_path_str(centre, radius, start_angle, end_angle),
+                    );
+                    elem
+                }
+            };
+            xml_elem.add_attribute("fill", "none");
+            xml_elem.add_attribute("stroke", "black");
+            xml_elem.add_attribute("stroke-width", "4");
+            xml_elem.add_attribute("stroke-linecap", "round");
+            xml_elem
+        }
+    }
 }
 
 /// Configuration for how a sudoku should be rendered

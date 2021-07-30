@@ -1,9 +1,9 @@
 //! Code for converting a `Builder` into a debug-able SVG string
 
 use crate::{
-    indexed_vec::{BoxIdx, VertVec},
-    utils::{self, circle_passing_through},
-    Side, V2Ext, V2,
+    shape::LinkShape,
+    utils::{self, Rect2},
+    V2Ext, V2,
 };
 
 use super::{Builder, EdgeLinkStyle};
@@ -25,16 +25,16 @@ pub fn gen_svg(bdr: &Builder, scaling: f32) -> String {
     let stroke_width = LINE_WIDTH * scaling;
 
     // This bounding box is in **untransformed** space
-    let (bbox_min, bbox_max) =
-        utils::bbox(bdr.verts.iter().map(|v| v.position)).unwrap_or_else(|| (V2::ZERO, V2::ZERO));
+    let bbox = Rect2::bbox(bdr.verts.iter().map(|v| v.position))
+        .unwrap_or_else(|| Rect2::from_min_size(V2::ZERO, V2::ZERO)); // Default to the empty rect
     let padding_vec = V2::ONE * PADDING;
 
     // Transform the vertices so that their min-point is (padding, padding) and they're scaled up
     // by the `scaling` factor
-    let transform = |pt: V2| (pt - bbox_min + padding_vec) * scaling;
+    let transform = |pt: V2| (pt - bbox.min() + padding_vec) * scaling;
     let transformed_verts = bdr.verts.map(|v| transform(v.position));
     // Compute the dimensions of the resulting SVG image
-    let img_dimensions = (bbox_max - bbox_min + padding_vec * 2.0) * scaling;
+    let img_dimensions = (bbox.max() - bbox.min() + padding_vec * 2.0) * scaling;
 
     // Root SVG element
     let mut root = XMLElement::new("svg");
@@ -95,58 +95,84 @@ pub fn gen_svg(bdr: &Builder, scaling: f32) -> String {
         }
     }
 
+    enum EdgeLinkLineType {
+        Full,   // The link is meant to be a line
+        Error,  // The link is being rendered as a line as a fallback for some other shape
+        Hidden, // The link is meant to be hidden, but is visible for debugging
+    }
+
     // Edge links
     for link in bdr.edge_links.iter() {
-        // Get the vertices on either side of the link
-        let (start_pos, start_norm) =
-            edge_midpoint_and_normal(bdr, &transformed_verts, link.start_box_idx, link.start_side);
-        let (end_pos, _end_norm) =
-            edge_midpoint_and_normal(bdr, &transformed_verts, link.end_box_idx, link.end_side);
+        // Get the vertex positions
+        let start_vert_left = *transformed_verts.get(link.vert_idx_top_left).unwrap();
+        let start_vert_right = *transformed_verts.get(link.vert_idx_top_right).unwrap();
+        let end_vert_left = *transformed_verts.get(link.vert_idx_bottom_left).unwrap();
+        let end_vert_right = *transformed_verts.get(link.vert_idx_bottom_right).unwrap();
 
-        // Compute the shape of the ellipse, or default to lines
-        let circle = match link.style {
-            EdgeLinkStyle::Arc => circle_passing_through(start_pos, start_norm, end_pos),
-            EdgeLinkStyle::Linear => None,
+        // Get the midpoints and normals of the two ends of the link (with the normals pointing
+        // away from the line)
+        let (start_pos, start_norm) = midpoint_and_normal(start_vert_right, start_vert_left);
+        let (end_pos, _end_norm) = midpoint_and_normal(end_vert_left, end_vert_right);
+
+        // Compute how this edge link should be displayed
+        let (element, line_type) = match link.style {
+            EdgeLinkStyle::Arc => LinkShape::arc_passing_through(start_pos, start_norm, end_pos)
+                .map(|arc| (arc, EdgeLinkLineType::Full)) // Draw the arc if it exists
+                .unwrap_or_else(|| {
+                    // If the arc doesn't exist, fall back on an error line
+                    (LinkShape::Line(start_pos, end_pos), EdgeLinkLineType::Error)
+                }),
+            EdgeLinkStyle::Linear => (LinkShape::Line(start_pos, end_pos), EdgeLinkLineType::Full),
+            EdgeLinkStyle::Hidden => (
+                LinkShape::Line(start_pos, end_pos),
+                EdgeLinkLineType::Hidden,
+            ),
         };
-        if let Some((centre, radius, start_angle, end_angle)) = circle {
-            // Draw a circular arc between the points
-            let mut line_elem = XMLElement::new("path");
-            line_elem.add_attribute(
-                "d",
-                &utils::svg_circle_arc_path_str(centre, radius, start_angle, end_angle),
-            );
-            line_elem.add_attribute("fill", "none");
-            line_elem.add_attribute("stroke", "black");
-            line_elem.add_attribute("stroke-linecap", "round");
-            line_elem.add_attribute("stroke-width", &stroke_width_str);
-            root.add_child(line_elem);
-        } else {
-            // Add a line between the two edge centres
-            let mut line_elem = XMLElement::new("line");
-            line_elem.add_attribute("x1", &start_pos.x.to_string());
-            line_elem.add_attribute("y1", &start_pos.y.to_string());
-            line_elem.add_attribute("x2", &end_pos.x.to_string());
-            line_elem.add_attribute("y2", &end_pos.y.to_string());
-            line_elem.add_attribute("stroke", "black");
-            line_elem.add_attribute("stroke-linecap", "round");
-            line_elem.add_attribute("stroke-width", &stroke_width_str);
-            root.add_child(line_elem);
+
+        // Generate the SVG element for this link
+        let stroke_color = match line_type {
+            EdgeLinkLineType::Full => "black",
+            EdgeLinkLineType::Hidden => "rgb(170,170,170)",
+            EdgeLinkLineType::Error => "red",
+        };
+        match element {
+            LinkShape::CircularArc {
+                centre,
+                radius,
+                start_angle,
+                end_angle,
+            } => {
+                // Draw a circular arc between the points
+                let mut line_elem = XMLElement::new("path");
+                line_elem.add_attribute(
+                    "d",
+                    &utils::svg_circle_arc_path_str(centre, radius, start_angle, end_angle),
+                );
+                line_elem.add_attribute("fill", "none");
+                line_elem.add_attribute("stroke", stroke_color);
+                line_elem.add_attribute("stroke-linecap", "round");
+                line_elem.add_attribute("stroke-width", &stroke_width_str);
+                root.add_child(line_elem);
+            }
+            LinkShape::Line(p1, p2) => {
+                // Add a line between the two edge centres
+                let mut line_elem = XMLElement::new("line");
+                line_elem.add_attribute("x1", &p1.x.to_string());
+                line_elem.add_attribute("y1", &p1.y.to_string());
+                line_elem.add_attribute("x2", &p2.x.to_string());
+                line_elem.add_attribute("y2", &p2.y.to_string());
+                line_elem.add_attribute("stroke", stroke_color);
+                line_elem.add_attribute("stroke-linecap", "round");
+                line_elem.add_attribute("stroke-width", &stroke_width_str);
+                root.add_child(line_elem);
+            }
         }
     }
 
     root.to_string()
 }
 
-fn edge_midpoint_and_normal(
-    bdr: &Builder,
-    vert_positions: &VertVec<V2>,
-    box_idx: BoxIdx,
-    side: Side,
-) -> (V2, V2) {
-    // Extract vertex positions
-    let (vert1, vert2) = bdr.boxes[box_idx].get_edge_verts(side);
-    let pos1 = vert_positions[vert1];
-    let pos2 = vert_positions[vert2];
+fn midpoint_and_normal(pos1: V2, pos2: V2) -> (V2, V2) {
     // Compute values
     let midpoint = V2::lerp(pos1, pos2, 0.5);
     let normal = (pos1 - pos2).normal().normalise(); // Vector facing away from the box

@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
-use angle::Angle;
+use angle::{Angle, Deg, Rad};
 use itertools::Itertools;
 
 use crate::indexed_vec::{CellIdx, CellVec, IdxType, VertIdx, VertVec};
+use crate::utils::Rect2;
 use crate::{builder::Builder, utils, V2Ext, V2};
 
 pub(crate) mod svg;
@@ -27,6 +28,9 @@ pub struct Shape {
     /// certainly have 4 vertices (and therefore sides), but leaving this generic allows Kuudos to
     /// handle other Sudoku shapes, such as those with hexagonal cells
     pub(crate) cells: CellVec<Vec<VertIdx>>,
+    /// Extra elements drawn before the cells.  These can be used for things like rendering extra
+    /// links between boxes.
+    pub(crate) extra_elements: Vec<DrawElement>,
 }
 
 impl Shape {
@@ -104,8 +108,17 @@ impl Shape {
     }
 
     /// Returns the bounding box of this `Shape` as a (min, max) pair of vectors
-    pub(crate) fn bbox(&self) -> Option<(V2, V2)> {
-        utils::bbox(self.verts.iter().copied())
+    pub(crate) fn bbox(&self) -> Option<Rect2> {
+        let bbox_from_verts = Rect2::bbox(self.verts.iter().copied());
+        let bbox_from_links = Rect2::union_iter(self.extra_elements.iter().map(DrawElement::bbox));
+        // Combine the bboxes
+        let combined_bbox = match (bbox_from_verts, bbox_from_links) {
+            (Some(r1), Some(r2)) => r1.union(r2),
+            (None, Some(rect)) => rect,
+            (Some(rect), None) => rect,
+            (None, None) => return None,
+        };
+        Some(combined_bbox)
     }
 }
 
@@ -201,6 +214,7 @@ impl Shape {
             groups,
             verts,
             cells: cell_verts,
+            extra_elements: vec![], // Square grids don't need any extra elements
         }
     }
 
@@ -212,12 +226,108 @@ impl Shape {
         // Create a new parallelogram box for the star's point
         let down = V2::DOWN;
         let rotated_down = builder.rotate_point_by_steps(down, 1);
-        builder.add_box_parallelogram(V2::ZERO, down, rotated_down);
+        builder
+            .add_box_parallelogram(V2::ZERO, down, rotated_down)
+            // This unwrap is fine, because unless `num_points` is infinite the parallelogram boxes
+            // can't be linear (and are therefore well-defined)
+            .unwrap();
         // Rotate the built shape by the requested amount
         builder.rotate(base_angle);
-        // Build the shape
         let (shape, _symmetry) = builder.build().unwrap();
         shape // For the time being, throw away the symmetry
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum DrawElement {
+    EdgeLink(LinkShape),
+}
+
+impl DrawElement {
+    /// Returns the smallest [`Rect2`] which contains this element
+    pub(crate) fn bbox(&self) -> Rect2 {
+        match self {
+            DrawElement::EdgeLink(shape) => match shape {
+                &LinkShape::Line(p1, p2) => Rect2::bbox([p1, p2]).unwrap(),
+                &LinkShape::CircularArc {
+                    centre,
+                    radius,
+                    start_angle,
+                    end_angle,
+                } => {
+                    let point_at = |angle: Rad<f32>| centre + V2::RIGHT.rotate(angle) * radius;
+                    // Compute bbox of the start/end points
+                    let mut bbox =
+                        Rect2::bbox([point_at(start_angle), point_at(end_angle)]).unwrap();
+                    // Expand the bbox to cover all of the boundary points (i.e. min/max x/y points
+                    // on the circle) which are covered by the arc range
+                    let angles = [Deg(0.0f32), Deg(90.0), Deg(180.0), Deg(270.0)];
+                    let angle_covered_by_arc = (end_angle - start_angle).to_deg().wrap();
+                    for a in angles {
+                        let angle_from_start = (a - start_angle.to_deg()).wrap();
+                        if angle_from_start < angle_covered_by_arc {
+                            // If this boundary point is within the arc, then expand the boundary
+                            // to include it
+                            bbox.expand_to_include(point_at(a.to_rad()));
+                        }
+                    }
+                    // Return the expanded bbox
+                    bbox
+                }
+            },
+        }
+    }
+}
+
+/// Some simple shapes that can be rendered to SVG
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum LinkShape {
+    /// Draw a circular arc (angles are taken clockwise from the +X axis)
+    CircularArc {
+        centre: V2,
+        radius: f32,
+        start_angle: Rad<f32>,
+        end_angle: Rad<f32>,
+    },
+    /// Draw a straight line segment between two points.  If the last element is `true`, then
+    /// this is assumed to be a fallback for another style and this line will be shown red to
+    /// highlight the error.
+    Line(V2, V2),
+}
+
+impl LinkShape {
+    /// Generates the [`DrawElement`] passing through a pair of points, given a tangent through one
+    /// of them.  If such an arc cannot exist (for example, if both points lie on the tangent) then
+    /// `None` is returned
+    pub(crate) fn arc_passing_through(p1: V2, tangent_1: V2, p2: V2) -> Option<LinkShape> {
+        utils::circle_passing_through(p1, tangent_1, p2).map(
+            |(centre, radius, start_angle, end_angle)| LinkShape::CircularArc {
+                centre,
+                radius,
+                start_angle,
+                end_angle,
+            },
+        )
+    }
+
+    /// Translate and scale this `ElemShape`
+    pub(crate) fn transform(self, translation: V2, scaling: f32) -> Self {
+        match self {
+            LinkShape::CircularArc {
+                centre,
+                radius,
+                start_angle,
+                end_angle,
+            } => LinkShape::CircularArc {
+                centre: (centre + translation) * scaling,
+                radius: radius * scaling,
+                start_angle,
+                end_angle,
+            },
+            LinkShape::Line(p1, p2) => {
+                LinkShape::Line((p1 + translation) * scaling, (p2 + translation) * scaling)
+            }
+        }
     }
 }
 

@@ -2,7 +2,7 @@ use std::ops::Not;
 
 use crate::{
     indexed_vec::{BoxIdx, BoxVec, LinkIdx, LinkVec, SymmIdx, SymmVec, VertIdx, VertVec},
-    Shape, Symmetry, V2Ext, V2,
+    utils, Shape, Symmetry, V2Ext, V2,
 };
 
 use angle::{Angle, Deg};
@@ -99,10 +99,16 @@ impl Builder {
             V2::UP.rotate(angle) * cell_size,
             V2::RIGHT.rotate(angle) * cell_size,
         )
+        .unwrap() // Unwrapping here is fine, because square boxes are always well-defined
     }
 
     /// Add a new box in the shape of a parallelogram
-    pub fn add_box_parallelogram(&mut self, bottom_left_corner: V2, up: V2, right: V2) -> BoxIdx {
+    pub fn add_box_parallelogram(
+        &mut self,
+        bottom_left_corner: V2,
+        up: V2,
+        right: V2,
+    ) -> Result<BoxIdx, BoxAddError> {
         // `up` and `right` refer to the sides of the cells, so we scale up to the size of the box
         let box_up = up * self.box_height as f32;
         let box_right = right * self.box_width as f32;
@@ -123,23 +129,26 @@ impl Builder {
         top_edge: Side,
         bottom_box_idx: BoxIdx,
         bottom_edge: Side,
-    ) -> Option<BoxIdx> {
+    ) -> Result<BoxIdx, BoxAddError> {
         assert_ne!(top_box_idx, bottom_box_idx); // You can't connect two sides of the same box
-        let top_box = self.boxes.get(top_box_idx)?;
-        let bottom_box = self.boxes.get(bottom_box_idx)?;
-        let (vert_top_right, vert_top_left) = top_box.get_edge_verts(top_edge);
-        let (vert_bottom_left, vert_bottom_right) = bottom_box.get_edge_verts(bottom_edge);
-        Some(self.add_box(
-            self.verts.get(vert_bottom_left).unwrap().position,
-            self.verts.get(vert_top_left).unwrap().position,
-            self.verts.get(vert_top_right).unwrap().position,
-            self.verts.get(vert_bottom_right).unwrap().position,
-        ))
+
+        // Extract vertex locations
+        let (vert_top_right, vert_top_left) = self.vert_positions_of_edge(top_box_idx, top_edge)?;
+        let (vert_bottom_left, vert_bottom_right) =
+            self.vert_positions_of_edge(bottom_box_idx, bottom_edge)?;
+
+        // Add the box
+        self.add_box(
+            vert_bottom_left,
+            vert_top_left,
+            vert_top_right,
+            vert_bottom_right,
+        )
     }
 
     /// Adds a new box which extends outwards from a given edge
     #[must_use]
-    pub fn extrude_edge(&mut self, box_idx: BoxIdx, side: Side) -> Option<BoxIdx> {
+    pub fn extrude_edge(&mut self, box_idx: BoxIdx, side: Side) -> Result<BoxIdx, BoxAddError> {
         self.extrude_edge_with_opts(box_idx, side, 1.0)
     }
 
@@ -150,9 +159,12 @@ impl Builder {
         box_idx: BoxIdx,
         side: Side,
         extruded_cell_height: f32,
-    ) -> Option<BoxIdx> {
+    ) -> Result<BoxIdx, BoxAddError> {
         // Extract the vertices of the side being extruded
-        let box_ = self.boxes.get(box_idx)?;
+        let box_ = self
+            .boxes
+            .get(box_idx)
+            .ok_or(BoxAddError::InvalidBoxIdx(box_idx))?;
         let (vert_idx1, vert_idx2) = box_.get_edge_verts(side);
         let v1 = self.verts.get(vert_idx1).unwrap().position;
         let v2 = self.verts.get(vert_idx2).unwrap().position;
@@ -162,7 +174,7 @@ impl Builder {
         let edge_direction_per_cell =
             edge_direction / self.box_size_in_direction(side.direction()) as f32;
 
-        Some(self.add_box_parallelogram(v1, normal * extruded_cell_height, edge_direction_per_cell))
+        self.add_box_parallelogram(v1, normal * extruded_cell_height, edge_direction_per_cell)
     }
 
     /// Adds a new box to the shape, given 4 arbitrary vertices
@@ -172,8 +184,11 @@ impl Builder {
         top_left: V2,
         top_right: V2,
         bottom_right: V2,
-    ) -> BoxIdx {
-        // Generate each rotation of this box, storing that they are 'equivalent'
+    ) -> Result<BoxIdx, BoxAddError> {
+        let rotate_direction = classify_box([bottom_left, top_left, top_right, bottom_right])?;
+        // Generate each rotation of this box, storing that they are 'equivalent'.  Rotating a box
+        // doesn't change the relative positions of the vertices, so the validity/rotation check
+        // doesn't need to be performed each time.
         let equiv_class_idx = self.box_equiv_classes.next_idx();
         let mut box_idxs = Vec::<BoxIdx>::with_capacity(self.rotational_symmetry_factor);
         for i in 0..self.rotational_symmetry_factor {
@@ -186,6 +201,7 @@ impl Builder {
                 ],
                 equiv_class: equiv_class_idx,
                 rotation_within_equiv_class: i,
+                rotate_direction,
             };
             let new_box_idx = self.boxes.push(new_box);
             box_idxs.push(new_box_idx);
@@ -193,7 +209,7 @@ impl Builder {
         // Add the new equivalence class, checking that all the boxes are using the correct index
         let idx_of_original_box = box_idxs[0];
         assert_eq!(self.box_equiv_classes.push(box_idxs), equiv_class_idx);
-        idx_of_original_box
+        Ok(idx_of_original_box)
     }
 
     /* Add edge links */
@@ -201,47 +217,35 @@ impl Builder {
     /// Add an explicit link between two (non-adjacent) edges
     pub fn link_edges(
         &mut self,
-        start_box_idx: BoxIdx,
-        start_side: Side,
-        end_box_idx: BoxIdx,
-        end_side: Side,
+        top_box_idx: BoxIdx,
+        top_side: Side,
+        bottom_box_idx: BoxIdx,
+        bottom_side: Side,
         style: EdgeLinkStyle,
     ) -> Option<LinkIdx> {
-        // Generate all the rotational copies of the edge index, collecting them in a vec to avoid
-        // borrowing `self` twice
-        let start_box_idxs = self.equiv_box_iter(start_box_idx)?;
-        let end_box_idxs = self.equiv_box_iter(end_box_idx)?;
-        let links = start_box_idxs
-            .zip_eq(end_box_idxs)
-            .map(|(s_box_idx, e_box_idx)| EdgeLink {
-                start_box_idx: s_box_idx,
-                start_side,
-                end_box_idx: e_box_idx,
-                end_side,
+        // Compute the vertices on either side of the edge
+        let (vert_pos_tr, vert_pos_tl) = self.vert_positions_of_edge(top_box_idx, top_side).ok()?;
+        let (vert_pos_bl, vert_pos_br) = self
+            .vert_positions_of_edge(bottom_box_idx, bottom_side)
+            .ok()?;
+
+        // Add all symmetric versions of this link
+        let idx_of_original_link = self.edge_links.next_idx();
+        for i in 0..self.rotational_symmetry_factor {
+            // Cheeky helper function to get the index of a rotated vertex
+            let mut get_rotated_vert_idx =
+                |v: V2| self.get_vert_at(self.rotate_point_by_steps(v, i as isize));
+
+            let new_link = EdgeLink {
+                vert_idx_top_left: get_rotated_vert_idx(vert_pos_tl),
+                vert_idx_top_right: get_rotated_vert_idx(vert_pos_tr),
+                vert_idx_bottom_left: get_rotated_vert_idx(vert_pos_bl),
+                vert_idx_bottom_right: get_rotated_vert_idx(vert_pos_br),
                 style,
-            })
-            .collect_vec();
-
-        // Add the links
-        let first_link_idx = self.edge_links.next_idx();
-        for link in links {
-            self.edge_links.push(link);
+            };
+            self.edge_links.push(new_link);
         }
-        Some(first_link_idx)
-    }
-
-    /// Gets an iterator over the equivalent boxes
-    fn equiv_box_iter<'s>(&'s self, box_idx: BoxIdx) -> Option<impl Iterator<Item = BoxIdx> + 's> {
-        let box_ = self.boxes.get(box_idx)?;
-        let equiv_class = self.box_equiv_classes.get(box_.equiv_class).unwrap();
-        let iter = equiv_class
-            .iter()
-            .copied()
-            // Start the iterator at the box's index
-            .cycle()
-            .skip(box_.rotation_within_equiv_class)
-            .take(equiv_class.len());
-        Some(iter)
+        Some(idx_of_original_link)
     }
 
     /* Modifiers (i.e. functions which mutate the existing shape) */
@@ -308,6 +312,20 @@ impl Builder {
 
     /* Internal helpers */
 
+    /// Gets the two vertex positions on either end of some [`Side`] of a [`Box_`], in clockwise
+    /// order.
+    fn vert_positions_of_edge(&self, box_idx: BoxIdx, side: Side) -> Result<(V2, V2), BoxAddError> {
+        let (vert_idx1, vert_idx2) = self
+            .boxes
+            .get(box_idx)
+            .ok_or(BoxAddError::InvalidBoxIdx(box_idx))?
+            .get_edge_verts(side);
+        Ok((
+            self.verts.get(vert_idx1).unwrap().position,
+            self.verts.get(vert_idx2).unwrap().position,
+        ))
+    }
+
     /// Gets the vertex at a given position, creating a new vertex if necessary.
     /// This also creates symmetric versions of the new vertex and labels them as equivalent.
     fn get_vert_at(&mut self, new_pos: V2) -> VertIdx {
@@ -363,19 +381,99 @@ impl Builder {
     }
 }
 
+/// Helper function that takes 4 vertices, and classifies the box that joins those vertices (in the
+/// order specified)
+fn classify_box(verts: [V2; 4]) -> Result<RotateDirection, BoxAddError> {
+    /// The different states of the corner of a box
+    #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+    enum CornerType {
+        /// The 3 vertices round this corner turn clockwise
+        Clockwise,
+        /// The 3 vertices lie on a straight line (and therefore don't turn either direction)
+        Linear,
+        /// The 3 vertices round this corner turn anti-clockwise
+        AntiClockwise,
+    }
+
+    impl CornerType {
+        fn classify(a: impl Angle<f32>) -> CornerType {
+            let angle = a.to_deg().0;
+            if angle.abs() < 0.001 || angle.abs() > 360.0 - 0.001 {
+                // If the angle is close to 0 or 180 degrees, we call the corner 'linear'
+                CornerType::Linear
+            } else if angle > 0.0 {
+                // If the corner increases the angle, then it turns clockwise
+                CornerType::Clockwise
+            } else {
+                // If the corner decreases the angle, then it turns anti-clockwise
+                CornerType::AntiClockwise
+            }
+        }
+    }
+
+    // Iterate over the positions of all consecutive triple of vertices (i.e. pairs of edges
+    // which join at a vertex), and classify that vertex according to its direction
+    let directions = verts
+        .iter()
+        .circular_tuple_windows()
+        .map(|(v1, v2, v3)| {
+            // The edges go v1 -> v2 and v2 -> v3
+            let d1 = v2 - v1;
+            let d2 = v3 - v2;
+            // Classify the middle corner (v2) according to its angle
+            CornerType::classify(utils::angle_between(d1, d2))
+        })
+        .collect_vec();
+
+    // Count how many of corners have each classification
+    let num_anticlockwise = directions
+        .iter()
+        .filter(|c| **c == CornerType::AntiClockwise)
+        .count();
+    let num_linear = directions
+        .iter()
+        .filter(|c| **c == CornerType::Linear)
+        .count();
+    let num_clockwise = directions
+        .iter()
+        .filter(|c| **c == CornerType::Clockwise)
+        .count();
+
+    match (num_anticlockwise, num_linear, num_clockwise) {
+        // If all corners go anticlockwise, then this box is strictly convex but
+        // anticlockwise
+        (4, 0, 0) => Ok(RotateDirection::AntiClockwise),
+        // If all corners go clockwise, then this box doesn't need modification
+        (0, 0, 4) => Ok(RotateDirection::Clockwise),
+
+        // If two corners go each way, then the box must self-intersect
+        (2, 0, 2) => Err(BoxAddError::SelfIntersecting),
+        // If there are no linear corners, then the only remaining case is that the box
+        // isn't strictly convex
+        (_, 0, _) => Err(BoxAddError::NonConvex),
+        // If there are any linear corners, then we class the whole box as linear. Any case where
+        // `num_linear == 0` would be caught by the non-convex case (or higher cases)
+        (_, _, _) => Err(BoxAddError::LinearCorner),
+    }
+}
+
 //////////////////////////
 // ELEMENTS OF BUILDERS //
 //////////////////////////
 
-/// A link between two non-overlapping edges
+/* EDGE LINKS */
+
+/// A link between two non-overlapping edges.  The left/right-ness of vertices doesn't matter - the
+/// important thing is that the lefts and rights are consistent at either end (or else the edge
+/// link will cause a twist).
 #[derive(Debug, Clone)]
 struct EdgeLink {
     // Starting edge
-    start_box_idx: BoxIdx,
-    start_side: Side,
+    vert_idx_top_left: VertIdx,
+    vert_idx_top_right: VertIdx,
     // End edge
-    end_box_idx: BoxIdx,
-    end_side: Side,
+    vert_idx_bottom_left: VertIdx,
+    vert_idx_bottom_right: VertIdx,
     // What shape this link should take
     style: EdgeLinkStyle,
 }
@@ -386,9 +484,42 @@ pub enum EdgeLinkStyle {
     Arc,
     /// Draw a straight line between the edges
     Linear,
+    /// Don't draw anything.  This is only useful if (for example) you're making a 2D net of a 3D
+    /// shape and want to encode the connections without cluttering the drawing
+    Hidden,
 }
 
-/// A box of cells
+/// The sides of an [`EdgeLink`] that can connect to boxes
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum LinkSide {
+    Top,
+    Bottom,
+}
+
+impl From<LinkSide> for Side {
+    fn from(side: LinkSide) -> Self {
+        match side {
+            LinkSide::Top => Side::Top,
+            LinkSide::Bottom => Side::Bottom,
+        }
+    }
+}
+
+impl Not for LinkSide {
+    type Output = Self;
+
+    fn not(self) -> Self::Output {
+        match self {
+            LinkSide::Top => LinkSide::Bottom,
+            LinkSide::Bottom => LinkSide::Top,
+        }
+    }
+}
+
+/* BOX */
+
+/// A box of cells.  This is guaranteed to be non-intersecting (and all the box creation methods
+/// check this)
 #[derive(Debug, Clone)]
 struct Box_ {
     /// The indices of the vertices of this corner.  These are defined to be listed in clockwise
@@ -396,6 +527,21 @@ struct Box_ {
     vert_idxs: [VertIdx; 4],
     equiv_class: SymmIdx,
     rotation_within_equiv_class: usize,
+    /// In which direction the vertices are specified.  We maintain the invariant that symmetric
+    /// versions of boxes should have symmetric edge labellings, so in the case of reflectional
+    /// symmetry this requires us to create clockwise/anticlockwise pairs of boxes:
+    /// ```text
+    ///                 |
+    /// 0 ------- 1     |     1 ------- 0
+    /// |  ---->  |     |     |  <----  |
+    /// | ^     | |     |     | |     ^ |
+    /// | |     V |     |     | V     | |
+    /// |  <----  |     |     |  ---->  |
+    /// 3 ------- 2     |     2 ------- 3
+    ///                 |
+    ///            MIRROR LINE
+    /// ```
+    rotate_direction: RotateDirection,
 }
 
 impl Box_ {
@@ -403,6 +549,7 @@ impl Box_ {
     /// vice versa).
     fn swap_direction(&mut self) {
         self.vert_idxs.swap(1, 3);
+        self.rotate_direction = !self.rotate_direction;
     }
 
     /// Gets the two vertices on either side of an edge of this box.  The pair of vertices are in
@@ -422,6 +569,21 @@ impl Box_ {
             .unwrap()
     }
 }
+
+/// The possible ways that generating a box can fail
+#[derive(Debug, Clone, Copy)]
+pub enum BoxAddError {
+    /// The newly created box would intersect with itself
+    SelfIntersecting,
+    /// The newly created box has two adjacent edges forming a straight line
+    LinearCorner,
+    /// The newly created box is not strictly convex
+    NonConvex,
+    /// A [`BoxIdx`] was given that doesn't correspond to an exiting box
+    InvalidBoxIdx(BoxIdx),
+}
+
+/* VERTICES */
 
 /// A vertex at the corner of at least one box
 #[derive(Debug, Clone, Copy)]
@@ -466,6 +628,24 @@ impl Not for Direction {
         match self {
             Direction::Vertical => Direction::Horizontal,
             Direction::Horizontal => Direction::Vertical,
+        }
+    }
+}
+
+/// The possible directions of a rotation (clockwise/anti-clockwise)
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum RotateDirection {
+    Clockwise,
+    AntiClockwise,
+}
+
+impl Not for RotateDirection {
+    type Output = Self;
+
+    fn not(self) -> Self::Output {
+        match self {
+            Self::Clockwise => Self::AntiClockwise,
+            Self::AntiClockwise => Self::Clockwise,
         }
     }
 }

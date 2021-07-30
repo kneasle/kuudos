@@ -3,7 +3,7 @@
 use angle::Deg;
 use itertools::Itertools;
 use kuudos::{
-    builder::{Builder, EdgeLinkStyle},
+    builder::{BoxAddError, Builder, EdgeLinkStyle},
     shape::RenderingOpts,
     solve::{clues_from_str, solve},
     Shape, Side, V2Ext, V2,
@@ -14,7 +14,7 @@ const VALUE_NAMES: &str = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqr
 fn main() {
     let (shape, clues) = if true {
         // let s = Shape::star2x2(5, PI);
-        let builder = nine_mens_morris();
+        let builder = race_track().unwrap();
         std::fs::write("bdr.svg", builder.as_svg(40.0)).unwrap();
 
         let (s, _symm) = builder.build().unwrap();
@@ -67,13 +67,13 @@ enum DisplayType {
     CellNames,
 }
 
-fn nine_mens_morris() -> Builder {
+fn nine_mens_morris() -> Result<Builder, BoxAddError> {
     let mut bdr = Builder::new(3, 3, 4);
 
     // Add line(s) of connected cells
     let line_box_1 = bdr.add_box_square(V2::UP * 3.0, 1.0, Deg(0.0));
-    let line_box_2 = bdr.extrude_edge(line_box_1, Side::Top).unwrap();
-    let line_box_3 = bdr.extrude_edge(line_box_2, Side::Top).unwrap();
+    let line_box_2 = bdr.extrude_edge(line_box_1, Side::Top)?;
+    let line_box_3 = bdr.extrude_edge(line_box_2, Side::Top)?;
     // Add diagonal line(s) of 'floating' cells
     let up_right = V2::UP + V2::RIGHT;
     bdr.add_box_square(up_right * 3.0, 1.0, Deg(0.0));
@@ -109,17 +109,18 @@ fn nine_mens_morris() -> Builder {
         EdgeLinkStyle::Linear,
     );
 
-    bdr
+    Ok(bdr)
 }
 
-fn race_track() -> Builder {
+fn race_track() -> Result<Builder, BoxAddError> {
     // Create a Builder with 3-fold symmetry
     let mut bdr = Builder::new(3, 3, 3);
 
     // Create a new parallelogram box to make a hexagon
-    let hex_box = bdr.add_box_parallelogram(V2::ZERO, V2::UP, bdr.rotate_point_by_steps(V2::UP, 1));
+    let hex_box =
+        bdr.add_box_parallelogram(V2::ZERO, V2::UP, bdr.rotate_point_by_steps(V2::UP, 1))?;
     // Extrude a square face off one side
-    let outer_box = bdr.extrude_edge(hex_box, Side::Top).unwrap();
+    let outer_box = bdr.extrude_edge(hex_box, Side::Top)?;
     // Link the outer boxes together
     bdr.link_edges(
         outer_box,
@@ -131,19 +132,77 @@ fn race_track() -> Builder {
 
     // Rotate the hexagon so that the side we extruded faces upwards
     bdr.rotate(Deg(-30.0));
-    bdr
+    Ok(bdr)
 }
 
-fn triangle() -> Builder {
-    let mut builder = Builder::new(3, 3, 3);
-    let b = builder.add_box_square(V2::UP * 3.7, 1.0, Deg(-45.0));
-    builder
-        .connect_edges_with_box(
-            b,
-            Side::Bottom,
-            builder.rotational_copy_of(b, 1).unwrap(),
-            Side::Left,
-        )
-        .unwrap();
-    builder
+fn triangle() -> Result<Builder, BoxAddError> {
+    let mut bdr = Builder::new(3, 3, 3);
+    let b = bdr.add_box_square(V2::UP * 3.7, 1.0, Deg(-45.0));
+    bdr.connect_edges_with_box(
+        b,
+        Side::Bottom,
+        bdr.rotational_copy_of(b, 1).unwrap(),
+        Side::Left,
+    )
+    .unwrap();
+    Ok(bdr)
+}
+
+fn cube() -> Result<Builder, BoxAddError> {
+    // TODO: Allow specifying what rotation the extruded box should have
+    /* Cube net layout and box naming:
+     *
+     *              top_box
+     *                 |
+     * left_box -- front_box -- right_box
+     *                 |
+     *            bottom_box
+     *                 |
+     *             back_box
+     */
+    let mut bdr = Builder::new(4, 4, 1);
+    // Add boxes
+    let front_box = bdr.add_box_square(V2::ZERO, 1.0, Deg(0.0));
+    let top_box = bdr.extrude_edge(front_box, Side::Top)?;
+    let left_box = bdr.extrude_edge(front_box, Side::Left)?;
+    let right_box = bdr.extrude_edge(front_box, Side::Right)?;
+    let bottom_box = bdr.extrude_edge(front_box, Side::Bottom)?;
+    let back_box = bdr.extrude_edge(bottom_box, Side::Top)?; // The bottom box ends up upside down
+
+    // Link the top-right-left-bottom cycle
+    bdr.link_edges(
+        top_box,
+        Side::Right,
+        right_box,
+        Side::Left,
+        EdgeLinkStyle::Hidden,
+    )
+    .unwrap();
+    bdr.link_edges(
+        top_box,
+        Side::Left,
+        left_box,
+        Side::Right,
+        EdgeLinkStyle::Hidden,
+    )
+    .unwrap();
+    bdr.link_edges(
+        left_box,
+        Side::Left,
+        bottom_box,
+        Side::Right,
+        EdgeLinkStyle::Hidden,
+    )
+    .unwrap();
+    // Link the front-right-back-left cycle
+    bdr.link_edges(
+        right_box,
+        Side::Top,
+        back_box,
+        Side::Left,
+        EdgeLinkStyle::Hidden,
+    )
+    .unwrap();
+
+    Ok(bdr)
 }
