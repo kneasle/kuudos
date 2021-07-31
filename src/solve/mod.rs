@@ -135,10 +135,9 @@ impl From<&Shape> for ShapeData {
     fn from(shape: &Shape) -> Self {
         let mut affected_cells: CellVec<Vec<CellIdx>> =
             CellVec::repeat(Vec::new(), shape.num_cells());
-        for cell_idxs_in_group in &shape.groups {
-            for &cell_idx in cell_idxs_in_group {
-                affected_cells[cell_idx]
-                    .extend(cell_idxs_in_group.iter().filter(|idx| **idx != cell_idx));
+        for group in &shape.groups {
+            for &cell_idx in &group.cells {
+                affected_cells[cell_idx].extend(group.cells.iter().filter(|idx| **idx != cell_idx));
             }
         }
         // Deduplicate the lists of affected cells

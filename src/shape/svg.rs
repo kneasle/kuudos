@@ -86,19 +86,18 @@ pub fn gen_svg_string(
         .edges()
         .into_iter()
         .map(|edge| {
-            let num_shared_groups = edge
-                .cell_idx_left
-                .map(|cell_left| shape.num_groups_shared_between(cell_left, edge.cell_idx_right));
-            let edge_type = match num_shared_groups {
-                Some(0) => EdgeType::Disconnected,
-                // If the edge sits between two cells, then it is internal and is therefore bold
-                // iff it is on the border between two boxes (i.e. is only connected by a row or
-                // column).
-                Some(1) => EdgeType::BoxBorder,
-                // Any cell with more than two connections must be contained in a box
-                Some(_) => EdgeType::CellBorder,
-                // Edges with only one cell must be at the edge of the grid, and are therefore bold
-                None => EdgeType::BoxBorder,
+            let edge_type = match edge.cell_idx_left {
+                Some(cell_left) => {
+                    if shape.num_groups_shared_between(cell_left, edge.cell_idx_right) == 0 {
+                        EdgeType::Disconnected // Adjacent cells which share no groups
+                    } else if shape.do_cells_share_box(cell_left, edge.cell_idx_right) {
+                        EdgeType::CellBorder // Adjacent cells which are in the same box
+                    } else {
+                        EdgeType::BoxBorder // Adjacent cells which share a group but aren't in the
+                                            // same box
+                    }
+                }
+                None => EdgeType::BoxBorder, // External edges
             };
             (edge_type, edge)
         })

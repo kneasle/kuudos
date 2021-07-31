@@ -6,7 +6,7 @@ use itertools::Itertools;
 
 use crate::{
     indexed_vec::{BoxIdx, CellIdx, CellVec, EdgeIdx, EdgeVec, LinkIdx, VertIdx, VertVec},
-    shape::{DrawElement, LinkShape},
+    shape::{DrawElement, Group, LinkShape},
     Shape, Symmetry, V2,
 };
 
@@ -448,16 +448,16 @@ fn generate_groups<'e>(
     cell_idx_by_coord: &HashMap<CellCoord, CellIdx>,
     box_edge_map: &BoxEdgeMap,
     link_edge_map: &LinkEdgeMap,
-) -> Vec<Vec<CellIdx>> {
-    let mut groups = Vec::<Vec<CellIdx>>::new();
+) -> Vec<Group> {
+    let mut groups = Vec::<Group>::new();
 
     // Group cells into boxes (no graph traversal required)
     for (box_idx, _box) in bdr.boxes.indexed_iter() {
-        let box_group = (0..bdr.box_width)
+        let cells = (0..bdr.box_width)
             .cartesian_product(0..bdr.box_height)
             .map(|(x, y)| *cell_idx_by_coord.get(&CellCoord { box_idx, x, y }).unwrap())
             .collect_vec();
-        groups.push(box_group);
+        groups.push(Group::box_group(cells));
     }
 
     /* Group cells into rows/columns (known generally as 'lanes') */
@@ -503,7 +503,7 @@ fn generate_groups<'e>(
 
         // Split this box path into individual lanes of cells, and add those lanes as groups
         let lanes = get_lanes_down_path(bdr, &box_path, cell_idx_by_coord);
-        groups.extend(lanes);
+        groups.extend(lanes.into_iter().map(Group::non_box_group));
     }
 
     groups

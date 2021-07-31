@@ -202,6 +202,10 @@ pub fn svg_circle_arc_path_str(
     )
 }
 
+////////////////////////
+// UTILITY DATA TYPES //
+////////////////////////
+
 /// Extension trait to add more methods to [`V2`]
 pub trait V2Ext {
     const ZERO: Self;

@@ -19,7 +19,7 @@ pub struct Shape {
     /// How many different symbols are allowed in this `Shape`
     pub(crate) num_symbols: usize,
     /// Each group specifies a set of cells which can't contain two of the same symbol
-    pub(crate) groups: Vec<Vec<CellIdx>>,
+    pub(crate) groups: Vec<Group>,
 
     /* DISPLAY DATA */
     /// The 2D coordinates of the vertices of this shape
@@ -63,8 +63,15 @@ impl Shape {
     ) -> usize {
         self.groups
             .iter()
-            .filter(|cells| cells.contains(&cell_idx1) && cells.contains(&cell_idx2))
+            .filter(|group| group.cells.contains(&cell_idx1) && group.cells.contains(&cell_idx2))
             .count()
+    }
+
+    /// Returns `true` if there is at least one box which contains both cells
+    pub(crate) fn do_cells_share_box(&self, cell_idx1: CellIdx, cell_idx2: CellIdx) -> bool {
+        self.groups.iter().any(|group| {
+            group.is_box && group.cells.contains(&cell_idx1) && group.cells.contains(&cell_idx2)
+        })
     }
 
     /// Generate the [`Edge`]s which appear in this `Shape`.
@@ -155,14 +162,16 @@ impl Shape {
 
         /* GENERATE GROUPS */
 
-        let mut groups = Vec::<Vec<CellIdx>>::with_capacity(grid_width * 3);
+        let mut groups = Vec::<Group>::with_capacity(grid_width * 3);
         // Rows
         for row in 0..grid_width {
-            groups.push((0..grid_width).map(|col| cell_idx(row, col)).collect_vec());
+            let cells = (0..grid_width).map(|col| cell_idx(row, col)).collect_vec();
+            groups.push(Group::non_box_group(cells));
         }
         // Columns
         for col in 0..grid_width {
-            groups.push((0..grid_width).map(|row| cell_idx(row, col)).collect_vec());
+            let cells = (0..grid_width).map(|row| cell_idx(row, col)).collect_vec();
+            groups.push(Group::non_box_group(cells));
         }
         // If `box_width` or `box_height` are 1, then the boxes will become either all rows or all
         // columns.  In either case, the boxes aren't needed
@@ -171,16 +180,16 @@ impl Shape {
             // tall)
             for box_col in 0..box_height {
                 for box_row in 0..box_width {
-                    let mut new_group = Vec::with_capacity(grid_width);
+                    let mut cells = Vec::with_capacity(grid_width);
                     for sub_box_row in 0..box_height {
                         for sub_box_col in 0..box_width {
-                            new_group.push(cell_idx(
+                            cells.push(cell_idx(
                                 box_row * box_height + sub_box_row,
                                 box_col * box_width + sub_box_col,
                             ));
                         }
                     }
-                    groups.push(new_group);
+                    groups.push(Group::box_group(cells));
                 }
             }
         }
@@ -235,6 +244,28 @@ impl Shape {
         builder.rotate(base_angle);
         let (shape, _symmetry) = builder.build().unwrap();
         shape // For the time being, throw away the symmetry
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Group {
+    is_box: bool,
+    pub(crate) cells: Vec<CellIdx>,
+}
+
+impl Group {
+    pub(crate) fn box_group(cells: Vec<CellIdx>) -> Self {
+        Self {
+            is_box: true,
+            cells,
+        }
+    }
+
+    pub(crate) fn non_box_group(cells: Vec<CellIdx>) -> Self {
+        Self {
+            is_box: false,
+            cells,
+        }
     }
 }
 
