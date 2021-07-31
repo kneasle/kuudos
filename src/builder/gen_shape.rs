@@ -455,7 +455,7 @@ fn generate_groups<'e>(
     for (box_idx, _box) in bdr.boxes.indexed_iter() {
         let cells = (0..bdr.box_width)
             .cartesian_product(0..bdr.box_height)
-            .map(|(x, y)| *cell_idx_by_coord.get(&CellCoord { box_idx, x, y }).unwrap())
+            .map(|(x, y)| cell_idx_by_coord[&CellCoord { box_idx, x, y }])
             .collect_vec();
         groups.push(Group::box_group(cells));
     }
@@ -542,7 +542,7 @@ fn traverse_path_forward(
                 // Step to the opposite side of the current box
                 let exit_side = cur_box_side.opposite();
                 let (new_edge_idx, new_edge_approach_side) =
-                    *box_edge_map.get(&(cur_box_idx, exit_side)).unwrap();
+                    box_edge_map[&(cur_box_idx, exit_side)];
                 // Step to the opposite side of the new edge
                 let new_edge = &edges[new_edge_idx];
                 (new_edge, new_edge_approach_side)
@@ -551,8 +551,7 @@ fn traverse_path_forward(
             EdgeConnection::Link(link_idx, link_side) => {
                 // Step to the opposite side of the current box
                 let exit_side = !link_side;
-                let (new_edge_idx, new_edge_approach_side) =
-                    *link_edge_map.get(&(link_idx, exit_side)).unwrap();
+                let (new_edge_idx, new_edge_approach_side) = link_edge_map[&(link_idx, exit_side)];
                 // Step to the opposite side of the new edge
                 let new_edge = &edges[new_edge_idx];
                 (new_edge, new_edge_approach_side)
@@ -643,7 +642,7 @@ fn get_lanes_down_path(
                     Side::Right => (lane_depth - 1 - idx_down_lane, num_lanes - 1 - lane_idx),
                 };
                 // Extend the corresponding lane
-                lane.push(*cell_idx_by_coord.get(&CellCoord { box_idx, x, y }).unwrap());
+                lane.push(cell_idx_by_coord[&CellCoord { box_idx, x, y }]);
             }
         }
     }

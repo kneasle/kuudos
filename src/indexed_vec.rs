@@ -126,13 +126,13 @@ impl<IdxT: IdxType, T> Index<IdxT> for TypedVec<IdxT, T> {
     type Output = T;
 
     fn index(&self, index: IdxT) -> &Self::Output {
-        self.get(index).unwrap()
+        &self.inner[index.to_idx()]
     }
 }
 
 impl<IdxT: IdxType, T> IndexMut<IdxT> for TypedVec<IdxT, T> {
     fn index_mut(&mut self, index: IdxT) -> &mut Self::Output {
-        self.get_mut(index).unwrap()
+        &mut self.inner[index.to_idx()]
     }
 }
 

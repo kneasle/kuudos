@@ -167,8 +167,8 @@ impl Builder {
             .get(box_idx)
             .ok_or(BoxAddError::InvalidBoxIdx(box_idx))?;
         let (vert_idx1, vert_idx2) = box_.get_edge_verts(side);
-        let v1 = self.verts.get(vert_idx1).unwrap().position;
-        let v2 = self.verts.get(vert_idx2).unwrap().position;
+        let v1 = self.verts[vert_idx1].position;
+        let v2 = self.verts[vert_idx2].position;
         // Compute (indirectly) the up and right directions for the new box
         let edge_direction = v2 - v1; // Vector pointing down the full length of the edge
         let normal = -edge_direction.normal().normalise(); // Points outwards from the edge
@@ -278,7 +278,7 @@ impl Builder {
     /// steps.
     pub fn rotational_copy_of(&self, box_idx: BoxIdx, rotation_steps: isize) -> Option<BoxIdx> {
         let box_ = self.boxes.get(box_idx)?;
-        let boxes_in_equiv_class = self.box_equiv_classes.get(box_.equiv_class).unwrap();
+        let boxes_in_equiv_class = &self.box_equiv_classes[box_.equiv_class];
 
         let num_rotation_steps = boxes_in_equiv_class.len();
         let unwrapped_idx = box_.rotation_within_equiv_class as isize + rotation_steps;
@@ -334,8 +334,8 @@ impl Builder {
             .ok_or(BoxAddError::InvalidBoxIdx(box_idx))?
             .get_edge_verts(side);
         Ok((
-            self.verts.get(vert_idx1).unwrap().position,
-            self.verts.get(vert_idx2).unwrap().position,
+            self.verts[vert_idx1].position,
+            self.verts[vert_idx2].position,
         ))
     }
 

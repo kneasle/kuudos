@@ -104,10 +104,10 @@ pub fn gen_svg(bdr: &Builder, scaling: f32) -> String {
     // Edge links
     for link in bdr.edge_links.iter() {
         // Get the vertex positions
-        let start_vert_left = *transformed_verts.get(link.vert_idx_top_left).unwrap();
-        let start_vert_right = *transformed_verts.get(link.vert_idx_top_right).unwrap();
-        let end_vert_left = *transformed_verts.get(link.vert_idx_bottom_left).unwrap();
-        let end_vert_right = *transformed_verts.get(link.vert_idx_bottom_right).unwrap();
+        let start_vert_left = transformed_verts[link.vert_idx_top_left];
+        let start_vert_right = transformed_verts[link.vert_idx_top_right];
+        let end_vert_left = transformed_verts[link.vert_idx_bottom_left];
+        let end_vert_right = transformed_verts[link.vert_idx_bottom_right];
 
         // Get the midpoints and normals of the two ends of the link (with the normals pointing
         // away from the line)
