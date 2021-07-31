@@ -6,7 +6,7 @@ use kuudos::{
     builder::{BoxAddError, Builder, EdgeLinkStyle},
     regular_polygon_inradius,
     shape::RenderingOpts,
-    solve::{clues_from_str, solve},
+    solve::{clues_from_str, naive::Naive, Solver},
     Shape, Side, V2Ext, V2,
 };
 
@@ -31,7 +31,7 @@ fn main() {
         (s, clues)
     };
 
-    let soln = solve(&shape, &clues, false).unwrap();
+    let soln = Naive::new(&shape).solve(&clues).unwrap();
 
     let display_type = DisplayType::Solution;
 
