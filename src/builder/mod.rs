@@ -121,6 +121,35 @@ impl Builder {
         self.add_box(unrotated_bl, unrotated_tl, unrotated_tr, unrotated_br)
     }
 
+    /// Add a new box in the shape of a parallelogram, rotating the box so that the side originally
+    /// labelled [`Side::Bottom`] will get the given label
+    pub fn add_box_parallelogram_rotated(
+        &mut self,
+        bottom_left_corner: V2,
+        up: V2,
+        right: V2,
+        map_bottom_to_side: Side,
+    ) -> Result<BoxIdx, BoxAddError> {
+        let (width, height) = match map_bottom_to_side.direction() {
+            Direction::Horizontal => (self.box_width, self.box_height),
+            // Swap width and height if the box is being rotated by 90 or 270 degrees
+            Direction::Vertical => (self.box_height, self.box_width),
+        };
+        // `up` and `right` refer to the sides of the cells, so we scale up to the size of the box
+        let box_right = right * width as f32;
+        let box_up = up * height as f32;
+        // Compute the unrotated coordinates of the four corners of the new box(es)
+        let unrotated_bl = bottom_left_corner;
+        let unrotated_tl = bottom_left_corner + box_up;
+        let unrotated_br = bottom_left_corner + box_right;
+        let unrotated_tr = bottom_left_corner + box_up + box_right;
+        // Rotate the vertex slice
+        let mut slice = [unrotated_bl, unrotated_tl, unrotated_tr, unrotated_br];
+        slice.rotate_right((map_bottom_to_side.index() + 4 - Side::Bottom.index()) % 4);
+        // Create a new box (or rather rotated set of boxes) with these vertices
+        self.add_box_from_slice(slice)
+    }
+
     /// Connect the edges of two (different) boxes with a new box
     #[must_use]
     pub fn connect_edges_with_box(
@@ -146,13 +175,15 @@ impl Builder {
         )
     }
 
-    /// Adds a new box which extends outwards from a given edge
+    /// Adds a new box which extends outwards from a given edge.  The new box always has the same
+    /// orientation as the box being extruded.
     #[must_use]
     pub fn extrude_edge(&mut self, box_idx: BoxIdx, side: Side) -> Result<BoxIdx, BoxAddError> {
         self.extrude_edge_with_opts(box_idx, side, 1.0, None)
     }
 
-    /// Adds a new box which extends outwards from a given edge, with extra options
+    /// Adds a new box which extends outwards from a given edge, with extra options.  The new box
+    /// always has the same orientation as the box being extruded.
     #[must_use]
     pub fn extrude_edge_with_opts(
         &mut self,
@@ -169,22 +200,34 @@ impl Builder {
         let (vert_idx1, vert_idx2) = box_.get_edge_verts(side);
         let v1 = self.verts[vert_idx1].position;
         let v2 = self.verts[vert_idx2].position;
+
         // Compute (indirectly) the up and right directions for the new box
         let edge_direction = v2 - v1; // Vector pointing down the full length of the edge
         let normal = -edge_direction.normal().normalise(); // Points outwards from the edge
         let edge_direction_per_cell =
             edge_direction / self.box_size_in_direction(side.direction()) as f32;
+
         // Create a new box at the right distance from the source box
         let bottom_left_corner = v1 + normal * link_height.unwrap_or(0.0);
-        let new_box = self.add_box_parallelogram(
-            bottom_left_corner,
-            normal * extruded_cell_height,
-            edge_direction_per_cell,
-        )?;
+        let new_box = self
+            .add_box_parallelogram_rotated(
+                bottom_left_corner,
+                normal * extruded_cell_height,
+                edge_direction_per_cell,
+                side.opposite(), // Rotate the box so that `Bottom` becomes `side.opposite()`
+            )
+            // This unwrap is safe because the resulting box will always be well-defined
+            .unwrap();
         // Add an edge link, if needed
         if link_height.is_some() {
-            self.link_edges(box_idx, side, new_box, Side::Bottom, EdgeLinkStyle::Linear)
-                .unwrap();
+            self.link_edges(
+                box_idx,
+                side,
+                new_box,
+                side.opposite(),
+                EdgeLinkStyle::Linear,
+            )
+            .unwrap();
         }
         // Return the new box
         Ok(new_box)
@@ -198,7 +241,12 @@ impl Builder {
         top_right: V2,
         bottom_right: V2,
     ) -> Result<BoxIdx, BoxAddError> {
-        let rotate_direction = classify_box([bottom_left, top_left, top_right, bottom_right])?;
+        self.add_box_from_slice([bottom_left, top_left, top_right, bottom_right])
+    }
+
+    /// Adds a new box to the shape, given a slice of 4 arbitrary vertices
+    pub fn add_box_from_slice(&mut self, verts: [V2; 4]) -> Result<BoxIdx, BoxAddError> {
+        let rotate_direction = classify_box(verts)?;
         // Generate each rotation of this box, storing that they are 'equivalent'.  Rotating a box
         // doesn't change the relative positions of the vertices, so the validity/rotation check
         // doesn't need to be performed each time.
@@ -207,10 +255,10 @@ impl Builder {
         for i in 0..self.rotational_symmetry_factor {
             let new_box = Box_ {
                 vert_idxs: [
-                    self.get_vert_at(self.rotate_point_by_steps(bottom_left, i as isize)),
-                    self.get_vert_at(self.rotate_point_by_steps(top_left, i as isize)),
-                    self.get_vert_at(self.rotate_point_by_steps(top_right, i as isize)),
-                    self.get_vert_at(self.rotate_point_by_steps(bottom_right, i as isize)),
+                    self.get_vert_at(self.rotate_point_by_steps(verts[0], i as isize)),
+                    self.get_vert_at(self.rotate_point_by_steps(verts[1], i as isize)),
+                    self.get_vert_at(self.rotate_point_by_steps(verts[2], i as isize)),
+                    self.get_vert_at(self.rotate_point_by_steps(verts[3], i as isize)),
                 ],
                 equiv_class: equiv_class_idx,
                 rotation_within_equiv_class: i,
@@ -544,41 +592,37 @@ struct Box_ {
     /// versions of boxes should have symmetric edge labellings, so in the case of reflectional
     /// symmetry this requires us to create clockwise/anticlockwise pairs of boxes:
     /// ```text
-    ///                 |
-    /// 0 ------- 1     |     1 ------- 0
-    /// |  ---->  |     |     |  <----  |
-    /// | ^     | |     |     | |     ^ |
-    /// | |     V |     |     | V     | |
-    /// |  <----  |     |     |  ---->  |
-    /// 3 ------- 2     |     2 ------- 3
-    ///                 |
-    ///            MIRROR LINE
+    ///    (clockwise)     |   (anticlockwise)
+    ///                    |
+    ///    0 ------- 1     |     1 ------- 0
+    ///    |  ---->  |     |     |  <----  |
+    ///    | ^     | |     |     | |     ^ |
+    ///    | |     V |     |     | V     | |
+    ///    |  <----  |     |     |  ---->  |
+    ///    3 ------- 2     |     2 ------- 3
+    ///                    |
+    ///               MIRROR LINE
     /// ```
     rotate_direction: RotateDirection,
 }
 
 impl Box_ {
     /// Swaps the direction of the vertices (so they go from clockwise order to anti-clockwise or
-    /// vice versa).
+    /// vice versa), preserving the lengths of each side.
     fn swap_direction(&mut self) {
-        self.vert_idxs.swap(1, 3);
+        self.vert_idxs.swap(0, 1); // Reverse left edge
+        self.vert_idxs.swap(2, 3); // Reverse right edge
         self.rotate_direction = !self.rotate_direction;
     }
 
     /// Gets the two vertices on either side of an edge of this box.  The pair of vertices are in
     /// clockwise order.
     fn get_edge_verts(&self, side: Side) -> (VertIdx, VertIdx) {
-        let edge_idx = match side {
-            Side::Left => 0,
-            Side::Top => 1,
-            Side::Right => 2,
-            Side::Bottom => 3,
-        };
         self.vert_idxs
             .iter()
             .copied()
             .circular_tuple_windows()
-            .nth(edge_idx)
+            .nth(side.index())
             .unwrap()
     }
 }
@@ -687,6 +731,17 @@ impl Side {
             Side::Top => Side::Bottom,
             Side::Right => Side::Left,
             Side::Bottom => Side::Top,
+        }
+    }
+
+    /// Returns the index from `0..4` which this `Side` will appear in the order specified by a
+    /// [`Box_`]
+    fn index(self) -> usize {
+        match self {
+            Side::Left => 0,
+            Side::Top => 1,
+            Side::Right => 2,
+            Side::Bottom => 3,
         }
     }
 }

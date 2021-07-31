@@ -4,6 +4,7 @@ use angle::Deg;
 use itertools::Itertools;
 use kuudos::{
     builder::{BoxAddError, Builder, EdgeLinkStyle},
+    regular_polygon_inradius,
     shape::RenderingOpts,
     solve::{clues_from_str, solve},
     Shape, Side, V2Ext, V2,
@@ -14,7 +15,7 @@ const VALUE_NAMES: &str = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqr
 fn main() {
     let (shape, clues) = if true {
         // let s = Shape::star2x2(5, PI);
-        let builder = mini_4x4().unwrap();
+        let builder = useless_wheel().unwrap();
         std::fs::write("bdr.svg", builder.as_svg(40.0)).unwrap();
 
         let (s, _symm) = builder.build().unwrap();
@@ -167,14 +168,14 @@ fn cube() -> Result<Builder, BoxAddError> {
     let left_box = bdr.extrude_edge(front_box, Side::Left)?;
     let right_box = bdr.extrude_edge(front_box, Side::Right)?;
     let bottom_box = bdr.extrude_edge(front_box, Side::Bottom)?;
-    let back_box = bdr.extrude_edge(bottom_box, Side::Top)?; // The bottom box ends up upside down
+    let back_box = bdr.extrude_edge(bottom_box, Side::Bottom)?;
 
     // Link the top-right-left-bottom cycle
     bdr.link_edges(
         top_box,
         Side::Right,
         right_box,
-        Side::Left,
+        Side::Top,
         EdgeLinkStyle::Hidden,
     )
     .unwrap();
@@ -182,24 +183,24 @@ fn cube() -> Result<Builder, BoxAddError> {
         top_box,
         Side::Left,
         left_box,
-        Side::Right,
+        Side::Top,
         EdgeLinkStyle::Hidden,
     )
     .unwrap();
     bdr.link_edges(
         left_box,
-        Side::Left,
+        Side::Bottom,
         bottom_box,
-        Side::Right,
+        Side::Left,
         EdgeLinkStyle::Hidden,
     )
     .unwrap();
     // Link the front-right-back-left cycle
     bdr.link_edges(
         right_box,
-        Side::Top,
+        Side::Right,
         back_box,
-        Side::Left,
+        Side::Right,
         EdgeLinkStyle::Hidden,
     )
     .unwrap();
@@ -214,12 +215,12 @@ fn useless_wheel() -> Result<Builder, BoxAddError> {
     // We build the top-right corner, and let the symmetry expand the rest
     let central_box = bdr.add_box_parallelogram(V2::ZERO, V2::UP, V2::RIGHT)?;
     let right_box = bdr.extrude_edge_with_opts(central_box, Side::Right, 1.0, Some(LINK_DEPTH))?;
-    let top_box = bdr.extrude_edge_with_opts(right_box, Side::Left, 1.0, Some(LINK_DEPTH))?;
+    let top_box = bdr.extrude_edge_with_opts(right_box, Side::Top, 1.0, Some(LINK_DEPTH))?;
     bdr.link_edges(
         top_box,
         Side::Left,
         bdr.rotational_copy_of(right_box, -1).unwrap(),
-        Side::Right,
+        Side::Bottom,
         EdgeLinkStyle::Linear,
     )
     .unwrap();
@@ -262,6 +263,36 @@ fn mini_4x4() -> Result<Builder, BoxAddError> {
         central_box,
         Side::Right,
         bdr.rotational_copy_of(central_box, 1).unwrap(),
+        Side::Top,
+        EdgeLinkStyle::Arc,
+    )
+    .unwrap();
+
+    Ok(bdr)
+}
+
+fn space_station() -> Result<Builder, BoxAddError> {
+    let inradius_of_triangle = regular_polygon_inradius(3, 2.0);
+
+    let mut bdr = Builder::new(3, 2, 3);
+    // Add 2x2 cells in the middle (again, we're building the top-right corner)
+    let horiz_box = bdr.add_box_square_by_corner(V2::new(inradius_of_triangle, 1.0), 1.0, Deg(0.0));
+    let _upper_box = bdr.add_box_parallelogram(
+        V2::new(inradius_of_triangle, -1.0),
+        V2::UP.rotate(Deg(30.0)),
+        V2::RIGHT,
+    )?;
+    let _lower_box = bdr.add_box_parallelogram(
+        V2::new(inradius_of_triangle, 1.0),
+        V2::DOWN.rotate(Deg(-30.0)),
+        V2::RIGHT,
+    )?;
+
+    let orbiting_face = bdr.extrude_edge_with_opts(horiz_box, Side::Right, 1.0, Some(1.4))?;
+    bdr.link_edges(
+        orbiting_face,
+        Side::Bottom,
+        bdr.rotational_copy_of(orbiting_face, 1).unwrap(),
         Side::Top,
         EdgeLinkStyle::Arc,
     )

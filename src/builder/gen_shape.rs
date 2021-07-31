@@ -126,6 +126,8 @@ fn generate_edges(bdr: &Builder) -> Result<(EdgeVec<Edge>, BoxEdgeMap, LinkEdgeM
     let mut edge_map = HashMap::<(VertIdx, VertIdx), EdgeIdx>::new();
 
     for (box_idx, box_) in bdr.boxes.indexed_iter() {
+        assert_eq!(box_.rotate_direction, RotateDirection::Clockwise);
+
         // These indices will make the current box on the right of
         // `edges[(vert_idx_bottom, vert_idx_top)]`.
         for (side_idx, (&vert_idx_bottom, &vert_idx_top)) in

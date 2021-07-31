@@ -17,6 +17,7 @@ pub struct TypedVec<Idx, T> {
     _phantom_data: PhantomData<Idx>,
 }
 
+#[allow(dead_code)] // Some functions exist solely to make the API more complete and may be unused
 impl<Idx, T> TypedVec<Idx, T> {
     /// Creates a new, empty type-safe collection
     pub fn new() -> Self {
@@ -44,7 +45,6 @@ impl<Idx, T> TypedVec<Idx, T> {
         }
     }
 
-    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }

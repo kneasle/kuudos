@@ -202,6 +202,27 @@ pub fn svg_circle_arc_path_str(
     )
 }
 
+/// Returns the radius of the largest circle which fits within a regular polygon with a given side
+/// length.
+pub fn regular_polygon_inradius(sides: usize, side_length: f32) -> f32 {
+    /* We do trig on the following triangle
+     *
+     *          half-edge
+     *          +--------+
+     *          |_|     /
+     *          |      /
+     *          |     /
+     * inradius |    /
+     *          |   / outradius
+     *          |  /
+     *          | /
+     *          |/  <---- angle = 360deg / sides * 2 = (PI / sides) radians
+     *          + centre
+     */
+    let angle = PI / sides as f32;
+    side_length * 0.5 / angle.tan()
+}
+
 ////////////////////////
 // UTILITY DATA TYPES //
 ////////////////////////

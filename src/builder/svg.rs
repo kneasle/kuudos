@@ -6,7 +6,7 @@ use crate::{
     V2Ext, V2,
 };
 
-use super::{Builder, EdgeLinkStyle};
+use super::{Builder, EdgeLinkStyle, RotateDirection};
 
 use angle::{Angle, Rad};
 use itertools::Itertools;
@@ -64,11 +64,16 @@ pub fn gen_svg(bdr: &Builder, scaling: f32) -> String {
 
         // Label each edge of the box with its direction
         let edge_names = ["LEFT", "TOP", "RIGHT", "BOTTOM"];
-        for ((&v1, &v2), name) in vert_coords
+        for ((&bottom_vert, &top_vert), name) in vert_coords
             .iter()
             .circular_tuple_windows()
             .zip_eq(edge_names)
         {
+            let (v1, v2) = match box_.rotate_direction {
+                RotateDirection::Clockwise => (bottom_vert, top_vert),
+                // Flip vertices on anti-clockwise faces
+                RotateDirection::AntiClockwise => (top_vert, bottom_vert),
+            };
             let d = v2 - v1; // A vector pointing down the line
             let normal = d.normal().normalise(); // A vector pointing into the box
             let centre = v1 + d / 2.0;
