@@ -15,7 +15,7 @@ const VALUE_NAMES: &str = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqr
 fn main() {
     let (shape, clues) = if true {
         // let s = Shape::star2x2(5, PI);
-        let builder = useless_wheel().unwrap();
+        let builder = radio_waves().unwrap();
         std::fs::write("bdr.svg", builder.as_svg(40.0)).unwrap();
 
         let (s, _symm) = builder.build().unwrap();
@@ -136,16 +136,31 @@ fn race_track() -> Result<Builder, BoxAddError> {
     Ok(bdr)
 }
 
-fn triangle() -> Result<Builder, BoxAddError> {
+fn radio_waves() -> Result<Builder, BoxAddError> {
+    let triangle_radius = regular_polygon_inradius(3, 3.0);
+
     let mut bdr = Builder::new(3, 3, 3);
-    let b = bdr.add_box_square(V2::UP * 3.7, 1.0, Deg(-45.0));
-    bdr.connect_edges_with_box(
-        b,
-        Side::Bottom,
-        bdr.rotational_copy_of(b, 1).unwrap(),
-        Side::Left,
-    )
-    .unwrap();
+    // Inner ring
+    let bottom_box = bdr.add_box_square(V2::UP * (triangle_radius + 1.5), 1.0, Deg(0.0));
+    let _corner_box = bdr.add_box_parallelogram(
+        V2::RIGHT * 1.5 + V2::UP * triangle_radius,
+        V2::UP,
+        V2::UP.rotate(Deg(120.0)),
+    )?;
+    // Outer rings
+    let stack_box_1 = bdr.extrude_edge(bottom_box, Side::Top)?;
+    let stack_box_2 = bdr.extrude_edge(stack_box_1, Side::Top)?;
+    for stack_box in [stack_box_1, stack_box_2] {
+        bdr.link_edges(
+            stack_box,
+            Side::Right,
+            bdr.rotational_copy_of(stack_box, 1).unwrap(),
+            Side::Left,
+            EdgeLinkStyle::Arc,
+        )
+        .unwrap();
+    }
+
     Ok(bdr)
 }
 
