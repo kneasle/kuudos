@@ -130,6 +130,7 @@ pub fn ellipse_passing_through(p1: V2, tang_1: V2, p2: V2, tang_2: V2) -> Option
 }
 
 /// Compute the intersection between two lines, returning `None` if the lines are parallel
+#[allow(clippy::many_single_char_names)] // Using longer names would make the maths less clear
 pub fn intersect_lines(p1: V2, d1: V2, p2: V2, d2: V2) -> Option<V2> {
     /// Convert both lines into the form `ax + by = c`
     fn convert_line(p: V2, d: V2) -> (f32, f32, f32) {

@@ -278,9 +278,9 @@ impl DrawElement {
     /// Returns the smallest [`Rect2`] which contains this element
     pub(crate) fn bbox(&self) -> Rect2 {
         match self {
-            DrawElement::EdgeLink(shape) => match shape {
-                &LinkShape::Line(p1, p2) => Rect2::bbox([p1, p2]).unwrap(),
-                &LinkShape::CircularArc {
+            DrawElement::EdgeLink(shape) => match *shape {
+                LinkShape::Line(p1, p2) => Rect2::bbox([p1, p2]).unwrap(),
+                LinkShape::CircularArc {
                     centre,
                     radius,
                     start_angle,

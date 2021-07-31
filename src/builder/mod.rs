@@ -151,7 +151,6 @@ impl Builder {
     }
 
     /// Connect the edges of two (different) boxes with a new box
-    #[must_use]
     pub fn connect_edges_with_box(
         &mut self,
         top_box_idx: BoxIdx,
@@ -177,14 +176,12 @@ impl Builder {
 
     /// Adds a new box which extends outwards from a given edge.  The new box always has the same
     /// orientation as the box being extruded.
-    #[must_use]
     pub fn extrude_edge(&mut self, box_idx: BoxIdx, side: Side) -> Result<BoxIdx, BoxAddError> {
         self.extrude_edge_with_opts(box_idx, side, 1.0, None)
     }
 
     /// Adds a new box which extends outwards from a given edge, with extra options.  The new box
     /// always has the same orientation as the box being extruded.
-    #[must_use]
     pub fn extrude_edge_with_opts(
         &mut self,
         box_idx: BoxIdx,
