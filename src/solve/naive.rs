@@ -7,11 +7,17 @@ use crate::{
     Shape,
 };
 
-use super::{Error, Solver, SolverMultipleSolns};
+use super::{Error, MultipleSolns, Solver, WithDifficulty};
 
+/// A pretty naive solver, using only 'naked singles' and backtracking.  Nevertheless, this naive
+/// approach is fast enough to efficiently solve most human-friendly puzzles.  It is, however,
+/// extremely bad at detecting unsolvable grids, making it unsuitable for tasks such as populating
+/// partially complete grids.  It is mainly intended as a cheap-and-cheerful test rig for other
+/// parts of the code.
 #[derive(Debug, Clone)]
 pub struct Naive<'s> {
     shape: &'s Shape,
+    config: Config,
     /// For a cell with index `i`, `affected_cells[i]` contains the set of cells which share a
     /// house with cell `i` (**excluding** `i` itself)
     affected_cells: CellVec<Vec<CellIdx>>,
@@ -22,13 +28,15 @@ impl<'s> Naive<'s> {
         &self,
         clues: &[Option<usize>],
         check_multiple_solns: bool,
-    ) -> Result<Vec<usize>, Error> {
+    ) -> Result<(Vec<usize>, f32), Error> {
         if self.shape.num_cells() != clues.len() {
             return Err(Error::ClueLenMismatch {
                 clue_len: clues.len(),
                 num_cells: self.shape.num_cells(),
             });
         }
+
+        let mut num_digits_penned = 0; // We use number of cells filled as our metric for difficulty
 
         // Create a partial solution where only the given clues are penned
         let mut partial = Partial::empty(self.shape);
@@ -40,15 +48,16 @@ impl<'s> Naive<'s> {
             .for_each(|(cell_idx, value)| partial.pen(self, cell_idx, value));
 
         // Run recursive backtracking on this grid, and extract the solution or propagate the error
-        self.recursive_solve(partial, check_multiple_solns)
-            .map(Partial::into_solved_digits)
+        self.recursive_solve(partial, check_multiple_solns, &mut num_digits_penned)
+            .map(Partial::into_solved_digits) // Extract the solution
+            .map(|grid| (grid, num_digits_penned as f32)) // Add the difficulty to the return value
     }
 
-    /// A very naive backtracking solver, which looks for 'naked singles'
     fn recursive_solve(
         &self,
         mut partial: Partial,
         check_multiple_solns: bool,
+        num_digits_penned: &mut usize,
     ) -> Result<Partial, Error> {
         // Repeatedly pen in 'naked singles' - i.e. a cell with only one possible digit.  These are
         // cheap to compute and don't require backtracking, so we perform them in-place on the current
@@ -60,6 +69,7 @@ impl<'s> Naive<'s> {
                 if let Some(only_digit) = partial.naked_single_digit(cell_idx) {
                     has_naked_singles = true;
                     partial.pen(self, cell_idx, only_digit);
+                    *num_digits_penned += 1;
                     // Whenever we pen a cell, check that the invariants are still upheld (but only in
                     // debug mode)
                     partial.debug_assert_invariants();
@@ -98,10 +108,17 @@ impl<'s> Naive<'s> {
             // Repeatedly pick the highest pencil mark in the cell, and remove its flag bit
             let assumed_digit = 63 - unexplored_pencil_mask.leading_zeros() as usize;
             unexplored_pencil_mask &= !(1 << assumed_digit);
+            // Add +1 difficulty because we had to guess.  This is a pretty terrible difficulty
+            // metric - the `solve::human::Human` solver implements a much better approximation of
+            // human difficulty
+            *num_digits_penned += 1;
+            if *num_digits_penned >= self.config.max_iterations {
+                return Err(Error::IterationLimitReached);
+            }
             // Create a new `Partial` which assumes that this digit is taken
             let mut new_partial = partial.clone();
             new_partial.pen(self, min_idx, assumed_digit);
-            match self.recursive_solve(new_partial, check_multiple_solns) {
+            match self.recursive_solve(new_partial, check_multiple_solns, num_digits_penned) {
                 Ok(new_solution) => {
                     if check_multiple_solns {
                         // If we are required to check for multiple solutions and this is the first
@@ -115,11 +132,14 @@ impl<'s> Naive<'s> {
                         return Ok(new_solution);
                     }
                 }
+                // If no solutions where found, then we keep looking for a solution
+                Err(Error::NoSolutions) => {}
                 // If the solver produced too many solutions, then this whole branch is unsolvable
                 // (because the other branches can only generate more solutions)
                 Err(Error::MultipleSolutions) => return Err(Error::MultipleSolutions),
-                // If no solutions where found, then we keep looking for a solution
-                Err(Error::NoSolutions) => {}
+                // Reaching the iteration limit forces the search to terminate, and therefore
+                // should make every recursive call return
+                Err(Error::IterationLimitReached) => return Err(Error::IterationLimitReached),
 
                 // This error can only be generated by the top-level `solve()` function
                 Err(Error::ClueLenMismatch { .. }) => unreachable!(),
@@ -134,7 +154,9 @@ impl<'s> Naive<'s> {
 }
 
 impl<'s> Solver<'s> for Naive<'s> {
-    fn new(shape: &'s Shape) -> Self {
+    type Config = Config;
+
+    fn new(shape: &'s Shape, config: Config) -> Self {
         let mut affected_cells: CellVec<Vec<CellIdx>> =
             CellVec::repeat(Vec::new(), shape.num_cells());
         for group in &shape.groups {
@@ -149,18 +171,43 @@ impl<'s> Solver<'s> for Naive<'s> {
         }
         Self {
             shape,
+            config,
             affected_cells,
         }
     }
 
     fn solve(&self, clues: &[Option<usize>]) -> Result<Vec<usize>, Error> {
         self.solve_(clues, false) // Delegate to the generic solver
+            .map(|(soln, _difficulty)| soln) // Discard the difficulty
     }
 }
 
-impl<'s> SolverMultipleSolns<'s> for Naive<'s> {
+impl<'s> MultipleSolns<'s> for Naive<'s> {
     fn solve_multiple_solns(&self, clues: &[Option<usize>]) -> Result<Vec<usize>, Error> {
         self.solve_(clues, true) // Delegate to the generic solver
+            .map(|(soln, _difficulty)| soln) // Discard the difficulty
+    }
+}
+
+impl<'s> WithDifficulty<'s> for Naive<'s> {
+    fn solve_with_difficulty(&self, clues: &[Option<usize>]) -> Result<(Vec<usize>, f32), Error> {
+        self.solve_(clues, true) // Delegate to the generic solver
+    }
+}
+
+/// Configuration parameters for the [`Naive`] solver
+#[derive(Debug, Clone)]
+pub struct Config {
+    /// Number of iterations (i.e. branches) that the [`Naive`] solver will take before rejecting
+    /// the grid as unsolvable
+    max_iterations: usize,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            max_iterations: 10_000_000, // 10M iterations sounds like enough
+        }
     }
 }
 
@@ -169,7 +216,7 @@ impl<'s> SolverMultipleSolns<'s> for Naive<'s> {
 struct Partial {
     /// Which cells have 'penned' values
     penned_cells: CellVec<Option<usize>>,
-    /// How many cells are 'unpenned'.
+    /// How many cells are 'unpenned'.  A `Partial` is solved if this is zero.
     ///
     /// Invariant: `num_unpenned_cells = penned_cells.iter().filter(|c| c.is_none()).count()`
     num_unpenned_cells: usize,

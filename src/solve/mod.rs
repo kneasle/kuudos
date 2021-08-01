@@ -6,17 +6,30 @@ use crate::Shape;
 
 pub mod naive;
 
+/// Trait implemented by all solving algorithms
 pub trait Solver<'s> {
-    /// Create a new solver that can be used to solve grids
-    fn new(shape: &'s Shape) -> Self;
+    type Config: Default;
+
+    /// Create a new solver that can be used to solve as many grids as needed.  This function
+    /// is essentially used to give the solvers an opportunity to build lookup tables for each
+    /// [`Shape`].
+    fn new(shape: &'s Shape, config: Self::Config) -> Self;
 
     /// Solve a puzzle
     fn solve(&self, clues: &[Option<usize>]) -> Result<Vec<usize>, Error>;
 }
 
-pub trait SolverMultipleSolns<'s>: Solver<'s> {
+/// Trait implemented by all solving algorithms which check for multiple solutions
+pub trait MultipleSolns<'s>: Solver<'s> {
     /// Solve a puzzle, checking for multiple solutions
     fn solve_multiple_solns(&self, clues: &[Option<usize>]) -> Result<Vec<usize>, Error>;
+}
+
+/// Trait implemented by all solving algorithms which check for multiple solutions and difficulty
+/// of the solution
+pub trait WithDifficulty<'s>: MultipleSolns<'s> {
+    /// Solve a puzzle, checking for multiple solutions
+    fn solve_with_difficulty(&self, clues: &[Option<usize>]) -> Result<(Vec<usize>, f32), Error>;
 }
 
 /// Generates a clue list from a string (where `'.'` or `'0'` represent an empty cell and
@@ -42,6 +55,8 @@ pub enum Error {
     NoSolutions,
     /// Multiple solutions were found (i.e. the grid is ambiguous)
     MultipleSolutions,
+    /// The solver hit its iteration limit before the search terminated naturally
+    IterationLimitReached,
 }
 
 impl Display for Error {
@@ -57,6 +72,7 @@ impl Display for Error {
             ),
             Error::NoSolutions => write!(f, "Puzzle has no solutions"),
             Error::MultipleSolutions => write!(f, "Puzzle is ambiguous (has multiple solutions)"),
+            Error::IterationLimitReached => write!(f, "Solver's iteration limit was reached"),
         }
     }
 }
