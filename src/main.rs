@@ -2,6 +2,7 @@
 
 use itertools::Itertools;
 use kuudos::{
+    puzzle_gen::{self, PuzzleGen},
     shape::RenderingOpts,
     solve::{
         clues_from_str,
@@ -14,14 +15,22 @@ use kuudos::{
 const VALUE_NAMES: &str = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
 fn main() {
-    let (shape, clues) = if true {
+    let (shape, clues, soln) = if true {
         // let s = Shape::star2x2(5, PI);
-        let builder = shapes::radio_waves().unwrap();
+        let builder = shapes::space_station().unwrap();
         std::fs::write("bdr.svg", builder.as_svg(40.0)).unwrap();
 
-        let (s, _symm) = builder.build().unwrap();
-        let clues = vec![None; s.num_cells()];
-        (s, clues)
+        let (s, symm) = builder.build().unwrap();
+        let (clues, soln) = PuzzleGen::<Naive, Naive>::new(
+            &s,
+            &symm,
+            naive::Config::default(),
+            naive::Config::default(),
+            puzzle_gen::Config::default(),
+        )
+        .generate()
+        .unwrap();
+        (s, clues, soln)
     } else {
         let s = Shape::classic();
         let clues = clues_from_str(
@@ -29,14 +38,15 @@ fn main() {
             // "..24..... .......98 ..8..16.. .5....826 ....4.7.. 7..8...5. ..167.... 3...92... ..9......",
             "4.....8.5 .3....... ...7..... .2.....6. ....8.4.. ....1.... ...6.3.7. 5..2..... 1.4......",
         );
-        (s, clues)
+
+        let soln = Naive::new(&s, naive::Config::default())
+            .solve(&clues)
+            .unwrap();
+
+        (s, clues, soln)
     };
 
-    let soln = Naive::new(&shape, naive::Config::default())
-        .solve(&clues)
-        .unwrap();
-
-    let display_type = DisplayType::Solution;
+    let display_type = DisplayType::Clues;
 
     // Write the shape to an SVG file
     let svg = shape.svg_string(

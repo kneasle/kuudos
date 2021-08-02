@@ -2,6 +2,7 @@ use vector2d::Vector2D;
 
 pub mod builder;
 mod indexed_vec;
+pub mod puzzle_gen;
 pub mod shape;
 pub mod solve;
 mod utils;

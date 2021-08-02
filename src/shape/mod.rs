@@ -392,4 +392,13 @@ impl Symmetry {
             num_equiv_classes: shape.num_cells(),
         }
     }
+
+    /// Each sub-list contains indices of cells which must be either all be clues or all be blank.
+    pub fn equiv_classes(&self) -> Vec<Vec<CellIdx>> {
+        let mut equiv_classes = vec![Vec::new(); self.num_equiv_classes];
+        for (cell_idx, &equiv_class_idx) in self.cell_equiv_classes.iter().enumerate() {
+            equiv_classes[equiv_class_idx].push(CellIdx::from_idx(cell_idx));
+        }
+        equiv_classes
+    }
 }
