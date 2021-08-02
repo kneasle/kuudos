@@ -20,14 +20,14 @@ pub trait Solver<'s> {
 }
 
 /// Trait implemented by all solving algorithms which check for multiple solutions
-pub trait MultipleSolns<'s>: Solver<'s> {
+pub trait MultipleSolnSolver<'s>: Solver<'s> {
     /// Solve a puzzle, checking for multiple solutions
     fn solve_multiple_solns(&self, clues: &[Option<usize>]) -> Result<Vec<usize>, Error>;
 }
 
 /// Trait implemented by all solving algorithms which check for multiple solutions and difficulty
 /// of the solution
-pub trait WithDifficulty<'s>: MultipleSolns<'s> {
+pub trait WithDifficulty<'s>: MultipleSolnSolver<'s> {
     /// Solve a puzzle, checking for multiple solutions
     fn solve_with_difficulty(&self, clues: &[Option<usize>]) -> Result<(Vec<usize>, f32), Error>;
 }

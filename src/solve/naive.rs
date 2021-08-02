@@ -7,7 +7,7 @@ use crate::{
     Shape,
 };
 
-use super::{Error, MultipleSolns, Solver, WithDifficulty};
+use super::{Error, MultipleSolnSolver, Solver, WithDifficulty};
 
 /// A pretty naive solver, using only 'naked singles' and backtracking.  Nevertheless, this naive
 /// approach is fast enough to efficiently solve most human-friendly puzzles.  It is, however,
@@ -36,7 +36,8 @@ impl<'s> Naive<'s> {
             });
         }
 
-        let mut num_digits_penned = 0; // We use number of cells filled as our metric for difficulty
+        let mut num_digits_penned = 0; // We use number of cells filled as our metric for
+                                       // difficulty
 
         // Create a partial solution where only the given clues are penned
         let mut partial = Partial::empty(self.shape);
@@ -60,8 +61,8 @@ impl<'s> Naive<'s> {
         num_digits_penned: &mut usize,
     ) -> Result<Partial, Error> {
         // Repeatedly pen in 'naked singles' - i.e. a cell with only one possible digit.  These are
-        // cheap to compute and don't require backtracking, so we perform them in-place on the current
-        // Partial.
+        // cheap to compute and don't require backtracking, so we perform them in-place on the
+        // current Partial.
         loop {
             let mut has_naked_singles = false;
             for (cell_idx, _cell) in self.affected_cells.indexed_iter() {
@@ -70,8 +71,8 @@ impl<'s> Naive<'s> {
                     has_naked_singles = true;
                     partial.pen(self, cell_idx, only_digit);
                     *num_digits_penned += 1;
-                    // Whenever we pen a cell, check that the invariants are still upheld (but only in
-                    // debug mode)
+                    // Whenever we pen a cell, check that the invariants are still upheld (but only
+                    // in debug mode)
                     partial.debug_assert_invariants();
                 }
             }
@@ -81,20 +82,20 @@ impl<'s> Naive<'s> {
             }
         }
 
-        // If the grid has not been solved by naked singles, then it is either solved or a branch is
-        // required
+        // If the grid has not been solved by naked singles, then it is either solved or a branch
+        // is required
 
-        // If the value of `partial` passed to this function is soluble using only naked singles then
-        // it permits precisely one solution, which `partial` now contains.  So we return that single
-        // solution
+        // If the value of `partial` passed to this function is soluble using only naked singles
+        // then it permits precisely one solution, which `partial` now contains.  So we return that
+        // single solution
         if partial.is_solved() {
             return Ok(partial);
         }
 
         // If `partial` isn't solved but no more naked singles are found, then we pick a non-penned
-        // cell and speculatively try each value to see which solutions are found.  We always want to
-        // remove as much of the possible search space as possible, so we pick (one of) the cells with
-        // the fewest options
+        // cell and speculatively try each value to see which solutions are found.  We always want
+        // to remove as much of the possible search space as possible, so we pick (one of) the
+        // cells with the fewest options
         let min_idx = partial
             .num_pencil_marks
             .indexed_iter()
@@ -147,8 +148,8 @@ impl<'s> Naive<'s> {
         }
 
         // If multiple solutions exist down this branch, we would have taken an early return.
-        // Therefore, this branch contains either 0 or 1 solutions (encoded by `solution` being `None`
-        // or `Some(_)` respectively).
+        // Therefore, this branch contains either 0 or 1 solutions (encoded by `solution` being
+        // `None` or `Some(_)` respectively).
         solution.ok_or(Error::NoSolutions)
     }
 }
@@ -182,7 +183,7 @@ impl<'s> Solver<'s> for Naive<'s> {
     }
 }
 
-impl<'s> MultipleSolns<'s> for Naive<'s> {
+impl<'s> MultipleSolnSolver<'s> for Naive<'s> {
     fn solve_multiple_solns(&self, clues: &[Option<usize>]) -> Result<Vec<usize>, Error> {
         self.solve_(clues, true) // Delegate to the generic solver
             .map(|(soln, _difficulty)| soln) // Discard the difficulty
