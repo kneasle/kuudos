@@ -24,13 +24,11 @@ const FONT_SIZE_MAX: f32 = 0.5; // (cell) edge lengths
 pub fn gen_svg(bdr: &Builder, scaling: f32) -> String {
     let stroke_width = LINE_WIDTH * scaling;
 
-    // This bounding box is in **untransformed** space
-    let bbox = Rect2::bbox(bdr.verts.iter().copied())
+    // Transform the vertices so that their minimum point is (padding, padding) and they're scaled
+    // up by the `scaling` factor
+    let bbox = Rect2::bbox(bdr.verts.iter().copied()) // This bbox is in **untansformed** space
         .unwrap_or_else(|| Rect2::from_min_size(V2::ZERO, V2::ZERO)); // Default to the empty rect
     let padding_vec = V2::ONE * PADDING;
-
-    // Transform the vertices so that their min-point is (padding, padding) and they're scaled up
-    // by the `scaling` factor
     let transform = |pt: V2| (pt - bbox.min() + padding_vec) * scaling;
     let transformed_verts = bdr.verts.map(|v| transform(*v));
     // Compute the dimensions of the resulting SVG image
@@ -44,16 +42,17 @@ pub fn gen_svg(bdr: &Builder, scaling: f32) -> String {
     // Boxes
     let stroke_width_str = stroke_width.to_string();
     for box_ in bdr.boxes.iter() {
-        let vert_coords = box_
+        let transformed_vert_coords = box_
             .vert_idxs
             .iter()
             .map(|idx| transformed_verts[*idx])
             .collect_vec();
-        let coord_string = vert_coords
+
+        // Create the polygon SVG element
+        let coord_string = transformed_vert_coords
             .iter()
             .map(|vert| format!("{},{}", vert.x, vert.y))
             .join(" ");
-
         let mut border_elem = XMLElement::new("polygon");
         border_elem.add_attribute("points", &coord_string);
         border_elem.add_attribute("fill", "white");
@@ -64,32 +63,32 @@ pub fn gen_svg(bdr: &Builder, scaling: f32) -> String {
 
         // Label each edge of the box with its direction
         let edge_names = ["LEFT", "TOP", "RIGHT", "BOTTOM"];
-        for ((&bottom_vert, &top_vert), name) in vert_coords
+        for ((&bottom_vert, &top_vert), name) in transformed_vert_coords
             .iter()
             .circular_tuple_windows()
             .zip_eq(edge_names)
         {
+            // Do the vector maths to figure out where the text should go
             let (v1, v2) = match box_.rotate_direction {
                 RotateDirection::Clockwise => (bottom_vert, top_vert),
-                // Flip vertices on anti-clockwise faces
-                RotateDirection::AntiClockwise => (top_vert, bottom_vert),
+                RotateDirection::AntiClockwise => (top_vert, bottom_vert), // Flip verts on
+                                                                           // anti-clockwise faces
             };
             let d = v2 - v1; // A vector pointing down the line
             let normal = d.normal().normalise(); // A vector pointing into the box
             let centre = v1 + d / 2.0;
             let text_coords = centre + normal * stroke_width * TEXT_DIST_FROM_EDGE;
-
-            let transform_str = format!(
-                "translate({},{}) rotate({})",
-                text_coords.x,
-                text_coords.y,
-                Rad((-d).angle()).to_deg().0
-            );
+            let text_angle_deg = Rad((-d).angle()).to_deg().0;
+            // Compute the text size (made harder because NaNs are stupid and can't be ordered)
             let text_size =
                 std::cmp::min_by(d.length() * FONT_SIZE, scaling * FONT_SIZE_MAX, |a, b| {
                     a.partial_cmp(b).expect("Text size should not be NaN")
                 });
-
+            // Create the SVG text element
+            let transform_str = format!(
+                "translate({},{}) rotate({})",
+                text_coords.x, text_coords.y, text_angle_deg
+            );
             let mut text_elem = XMLElement::new("text");
             text_elem.add_attribute("transform", &transform_str);
             text_elem.add_attribute("font-size", &text_size.to_string());
