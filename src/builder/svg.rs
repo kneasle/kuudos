@@ -25,14 +25,14 @@ pub fn gen_svg(bdr: &Builder, scaling: f32) -> String {
     let stroke_width = LINE_WIDTH * scaling;
 
     // This bounding box is in **untransformed** space
-    let bbox = Rect2::bbox(bdr.verts.iter().map(|v| v.position))
+    let bbox = Rect2::bbox(bdr.verts.iter().copied())
         .unwrap_or_else(|| Rect2::from_min_size(V2::ZERO, V2::ZERO)); // Default to the empty rect
     let padding_vec = V2::ONE * PADDING;
 
     // Transform the vertices so that their min-point is (padding, padding) and they're scaled up
     // by the `scaling` factor
     let transform = |pt: V2| (pt - bbox.min() + padding_vec) * scaling;
-    let transformed_verts = bdr.verts.map(|v| transform(v.position));
+    let transformed_verts = bdr.verts.map(|v| transform(*v));
     // Compute the dimensions of the resulting SVG image
     let img_dimensions = (bbox.max() - bbox.min() + padding_vec * 2.0) * scaling;
 

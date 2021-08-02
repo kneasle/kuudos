@@ -29,9 +29,7 @@ pub struct Builder {
     rotational_symmetry_factor: usize,
 
     /// The coordinates of the vertices added so far
-    verts: VertVec<Vert>,
-    /// The number given to the next vertex equivalence class
-    next_equiv_class: usize,
+    verts: VertVec<V2>,
 
     /// Each link joins two edges which don't touch each other.  These allow us to space out the
     /// boxes further, and allows for many more shapes
@@ -60,7 +58,6 @@ impl Builder {
             rotational_symmetry_factor,
 
             verts: VertVec::new(),
-            next_equiv_class: 0,
 
             edge_links: LinkVec::new(),
 
@@ -195,8 +192,8 @@ impl Builder {
             .get(box_idx)
             .ok_or(BoxAddError::InvalidBoxIdx(box_idx))?;
         let (vert_idx1, vert_idx2) = box_.get_edge_verts(side);
-        let v1 = self.verts[vert_idx1].position;
-        let v2 = self.verts[vert_idx2].position;
+        let v1 = self.verts[vert_idx1];
+        let v2 = self.verts[vert_idx2];
 
         // Compute (indirectly) the up and right directions for the new box
         let edge_direction = v2 - v1; // Vector pointing down the full length of the edge
@@ -313,7 +310,7 @@ impl Builder {
     pub fn rotate(&mut self, angle: impl Angle<f32> + Copy) {
         // Rotate all the vertices in-place
         for vert in self.verts.iter_mut() {
-            vert.position = vert.position.rotate(angle);
+            *vert = vert.rotate(angle);
         }
     }
 
@@ -378,10 +375,7 @@ impl Builder {
             .get(box_idx)
             .ok_or(BoxAddError::InvalidBoxIdx(box_idx))?
             .get_edge_verts(side);
-        Ok((
-            self.verts[vert_idx1].position,
-            self.verts[vert_idx2].position,
-        ))
+        Ok((self.verts[vert_idx1], self.verts[vert_idx2]))
     }
 
     /// Gets the vertex at a given position, creating a new vertex if necessary.
@@ -389,45 +383,9 @@ impl Builder {
     fn get_vert_at(&mut self, new_pos: V2) -> VertIdx {
         let existing_vert_idx = self
             .verts
-            .idx_of_first(|vert| (vert.position - new_pos).length() < 0.0001);
-
-        // If this vertex already exists, then return its index without creating a new set of
-        // vertices
-        if let Some(idx) = existing_vert_idx {
-            return idx;
-        }
-
-        // If the new vertex is at the origin, then all its rotations will be the same and so we
-        // add it once
-        if new_pos.length_squared() < 0.00001 * 0.00001 {
-            return self.verts.push(Vert {
-                position: V2::ZERO,
-                equiv_class: VertEquivClass::Centre,
-            });
-        }
-
-        // Because (currently) the symmetry factor must stay constant, if this vertex doesn't
-        // already exist, then all of its rotations must also not already exist.  Therefore, we
-        // can create all the rotational copies without checking if they already exist.
-        let idx_of_new_vert = self.verts.next_idx();
-        let equiv_class = self.fresh_equiv_class();
-        for i in 0..self.rotational_symmetry_factor {
-            self.verts.push(Vert {
-                position: self.rotate_point_by_steps(new_pos, i as isize),
-                equiv_class: VertEquivClass::NonCentre {
-                    equiv_class,
-                    equiv_rotation: i,
-                },
-            });
-        }
-        idx_of_new_vert
-    }
-
-    /// Generates a fresh equivalence class name - i.e. one which hasn't been used before
-    fn fresh_equiv_class(&mut self) -> usize {
-        let class = self.next_equiv_class;
-        self.next_equiv_class += 1;
-        class
+            .idx_of_first(|vert| (*vert - new_pos).length() < 0.0001);
+        // Add a new vertex if there isn't one already at this position
+        existing_vert_idx.unwrap_or_else(|| self.verts.push(new_pos))
     }
 
     /// Gets the number of cells along any [`Edge`] of a box in a given [`Direction`].
@@ -635,33 +593,6 @@ pub enum BoxAddError {
     NonConvex,
     /// A [`BoxIdx`] was given that doesn't correspond to an exiting box
     InvalidBoxIdx(BoxIdx),
-}
-
-/* VERTICES */
-
-/// A vertex at the corner of at least one box
-#[derive(Debug, Clone, Copy)]
-struct Vert {
-    /// The position of this vertex in 2D space
-    position: V2,
-    /// This vertex's position within the symmetry of the [`Shape`] being built
-    equiv_class: VertEquivClass,
-}
-
-#[derive(Debug, Clone, Copy)]
-enum VertEquivClass {
-    /// The vertex is at the origin, and therefore is simultaneously in every rotation
-    Centre,
-    /// The vertex isn't at the origin, and therefore belongs to a specific rotation of an
-    /// equivalence that it shares with other vertices
-    NonCentre {
-        /// Which equivalence class this vertex belongs to
-        equiv_class: usize,
-        /// What rotation this vertex has within its equivalence class.  This allows vertices in the
-        /// same equivalence class to be differentiated when computing the [`Symmetry`] of the
-        /// resulting [`Shape`]
-        equiv_rotation: usize,
-    },
 }
 
 ////////////////////////

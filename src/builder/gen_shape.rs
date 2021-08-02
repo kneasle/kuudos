@@ -279,7 +279,7 @@ fn generate_cell_vertices(
     // List of all the vertices of **cells** not boxes.  This starts out as the same as
     // `b.verts`, which means that the indices specified by box corners are valid for both
     // vertex lists
-    let mut cell_vert_positions = bdr.verts.map(|v| v.position);
+    let mut cell_vert_positions = bdr.verts.clone();
     // This maps triples of `(box_idx, box_coord_right, box_coord_up)` to the index of the
     // vertex at that position.  In this set `(i, 0, 0)` is the bottom-left vertex of box `i`,
     // and `(i, b.box_width, b.box_height)` is the top-right vertex of box `i`.
@@ -305,8 +305,8 @@ fn generate_cell_vertices(
         // index from the bottom of this edge
         let vert_indices = (1..=edge.length - 1).map(|num_cells_from_bottom| {
             let position = V2::lerp(
-                bdr.verts[edge.vert_idx_bottom].position,
-                bdr.verts[edge.vert_idx_top].position,
+                bdr.verts[edge.vert_idx_bottom],
+                bdr.verts[edge.vert_idx_top],
                 num_cells_from_bottom as f32 / edge.length as f32,
             );
             (num_cells_from_bottom, cell_vert_positions.push(position))
@@ -330,10 +330,10 @@ fn generate_cell_vertices(
     for (box_idx, box_) in bdr.boxes.indexed_iter() {
         let [bl_idx, tl_idx, tr_idx, br_idx] = box_.vert_idxs;
         // Unpack the locations of the corner vertices
-        let bl_pos = bdr.verts[bl_idx].position;
-        let tl_pos = bdr.verts[tl_idx].position;
-        let tr_pos = bdr.verts[tr_idx].position;
-        let br_pos = bdr.verts[br_idx].position;
+        let bl_pos = bdr.verts[bl_idx];
+        let tl_pos = bdr.verts[tl_idx];
+        let tr_pos = bdr.verts[tr_idx];
+        let br_pos = bdr.verts[br_idx];
         // For each internal vertex coordinate
         for x in 1..=bdr.box_width - 1 {
             for y in 1..=bdr.box_height - 1 {
@@ -415,10 +415,10 @@ fn generate_extra_elements(
         assert_eq!(get_edge_len(LinkSide::Bottom), num_lanes);
 
         // Get the vertex positions
-        let vert_pos_tl = bdr.verts[link.vert_idx_top_left].position;
-        let vert_pos_tr = bdr.verts[link.vert_idx_top_right].position;
-        let vert_pos_bl = bdr.verts[link.vert_idx_bottom_left].position;
-        let vert_pos_br = bdr.verts[link.vert_idx_bottom_right].position;
+        let vert_pos_tl = bdr.verts[link.vert_idx_top_left];
+        let vert_pos_tr = bdr.verts[link.vert_idx_top_right];
+        let vert_pos_bl = bdr.verts[link.vert_idx_bottom_left];
+        let vert_pos_br = bdr.verts[link.vert_idx_bottom_right];
         // Compute edge normals (i.e. normals facing into the link)
         let top_normal = (vert_pos_tr - vert_pos_tl).normal().normalise();
         let _bottom_normal = (vert_pos_bl - vert_pos_br).normal().normalise();
