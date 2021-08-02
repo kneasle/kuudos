@@ -41,8 +41,8 @@ pub fn gen_svg(bdr: &Builder, scaling: f32) -> String {
 
     // Boxes
     let stroke_width_str = stroke_width.to_string();
-    for box_ in bdr.boxes.iter() {
-        let transformed_vert_coords = box_
+    for (_idx, source_box) in bdr.source_boxes() {
+        let transformed_vert_coords = source_box
             .vert_idxs
             .iter()
             .map(|idx| transformed_verts[*idx])
@@ -69,7 +69,7 @@ pub fn gen_svg(bdr: &Builder, scaling: f32) -> String {
             .zip_eq(edge_names)
         {
             // Do the vector maths to figure out where the text should go
-            let (v1, v2) = match box_.rotate_direction {
+            let (v1, v2) = match source_box.rotate_direction {
                 RotateDirection::Clockwise => (bottom_vert, top_vert),
                 RotateDirection::AntiClockwise => (top_vert, bottom_vert), // Flip verts on
                                                                            // anti-clockwise faces

@@ -35,12 +35,7 @@ pub struct Builder {
     /// boxes further, and allows for many more shapes
     edge_links: LinkVec<EdgeLink>,
 
-    /// The boxes added to the shape so far.  These arrays store the vertex indices going clockwise
-    /// from the 'bottom left' of the box.  In reality, it's totally fine for people to rotate or
-    /// reflect boxes (thus moving the 'bottom left' corner to some other direction), but this way
-    /// we always have a consistent way to refer to the sides of boxes.  Additionally, the boxes
-    /// may be reflected (possibly in the case of reflectional symmetry) which is fine for a
-    /// `Builder` but not for a [`Shape`] (this is handled by [`Builder::build`]).
+    /// The boxes added to the shape so far.
     boxes: BoxVec<Box_>,
     /// Each `Vec<BoxIdx>` corresponds to a sequence of [`Box_`]es which are 'equivalent' according
     /// to rotational symmetry.
@@ -59,10 +54,10 @@ impl Builder {
 
             verts: VertVec::new(),
 
-            edge_links: LinkVec::new(),
-
             boxes: BoxVec::new(),
             box_equiv_classes: SymmVec::new(),
+
+            edge_links: LinkVec::new(),
         }
     }
 
@@ -187,13 +182,7 @@ impl Builder {
         link_height: Option<f32>,
     ) -> Result<BoxIdx, BoxAddError> {
         // Extract the vertices of the side being extruded
-        let box_ = self
-            .boxes
-            .get(box_idx)
-            .ok_or(BoxAddError::InvalidBoxIdx(box_idx))?;
-        let (vert_idx1, vert_idx2) = box_.get_edge_verts(side);
-        let v1 = self.verts[vert_idx1];
-        let v2 = self.verts[vert_idx2];
+        let (v1, v2) = self.vert_positions_of_edge(box_idx, side)?;
 
         // Compute (indirectly) the up and right directions for the new box
         let edge_direction = v2 - v1; // Vector pointing down the full length of the edge
@@ -247,18 +236,11 @@ impl Builder {
         let equiv_class_idx = self.box_equiv_classes.next_idx();
         let mut box_idxs = Vec::<BoxIdx>::with_capacity(self.rotational_symmetry_factor);
         for i in 0..self.rotational_symmetry_factor {
-            let new_box = Box_ {
-                vert_idxs: [
-                    self.get_vert_at(self.rotate_point_by_steps(verts[0], i as isize)),
-                    self.get_vert_at(self.rotate_point_by_steps(verts[1], i as isize)),
-                    self.get_vert_at(self.rotate_point_by_steps(verts[2], i as isize)),
-                    self.get_vert_at(self.rotate_point_by_steps(verts[3], i as isize)),
-                ],
-                equiv_class: equiv_class_idx,
+            let symmetry_position = SymmetryPosition {
+                equiv_class_idx,
                 rotation_within_equiv_class: i,
-                rotate_direction,
             };
-            let new_box_idx = self.boxes.push(new_box);
+            let new_box_idx = self.create_box(verts, rotate_direction, symmetry_position);
             box_idxs.push(new_box_idx);
         }
         // Add the new equivalence class, checking that all the boxes are using the correct index
@@ -319,16 +301,18 @@ impl Builder {
     /// Gets the [`BoxIdx`] of the copy of a box after being rotated by some number of rotation
     /// steps.
     pub fn rotational_copy_of(&self, box_idx: BoxIdx, rotation_steps: isize) -> Option<BoxIdx> {
+        // Get the list of boxes in this box's equivalence class
         let box_ = self.boxes.get(box_idx)?;
-        let boxes_in_equiv_class = &self.box_equiv_classes[box_.equiv_class];
-
+        let symmetry_position = box_.symmetry_position();
+        let boxes_in_equiv_class = &self.box_equiv_classes[symmetry_position.equiv_class_idx];
+        // Compute the (wrapped) index of the rotated box
         let num_rotation_steps = boxes_in_equiv_class.len();
-        let unwrapped_idx = box_.rotation_within_equiv_class as isize + rotation_steps;
+        let unwrapped_idx = symmetry_position.rotation_within_equiv_class as isize + rotation_steps;
         let wrapped_idx = (unwrapped_idx % num_rotation_steps as isize
             + num_rotation_steps as isize)
             % num_rotation_steps as isize;
-
         assert!(wrapped_idx >= 0);
+        // Get the BoxIdx of the rotated box
         Some(boxes_in_equiv_class[wrapped_idx as usize])
     }
 
@@ -367,12 +351,94 @@ impl Builder {
 
     /* Internal helpers */
 
+    /// Gets the [`SourceBox`] at a given [`BoxIdx`], following [`Box_::Ref`]s if necessary.
+    fn get_source_box(&self, mut box_idx: BoxIdx) -> Option<&SourceBox> {
+        loop {
+            match self.boxes.get(box_idx)? {
+                // If the box at `box_idx` is a `Ref`, then follow its reference
+                Box_::Ref { source_idx, .. } => box_idx = *source_idx,
+                // If the box is a source, then return the contained `SourceBox`.  This loop must
+                // always terminate because we require that:
+                // 1. Reference chains always reach a `Box_::Source` eventually
+                // 2. Each `Box_::Ref` must refer to a box index that is strictly smaller than its
+                //    own.  Thus, `box_idx` must strictly decrease every iteration and the loop
+                //    can't execute more than `self.boxes.len()` iterations (which is finite).
+                Box_::Source(source) => return Some(source),
+            }
+        }
+    }
+
+    /// Creating a new [`Box_`] with a given set of vertices, returning its [`BoxIdx`] and creating
+    /// a [`Box_::Ref`] if needed.
+    fn create_box(
+        &mut self,
+        verts: [V2; 4],
+        rotate_direction: RotateDirection,
+        symmetry_position: SymmetryPosition,
+    ) -> BoxIdx {
+        // Compute the indices of the vertices around this box
+        let r = symmetry_position.rotation_within_equiv_class;
+        let vert_idxs = [
+            self.get_vert_at(self.rotate_point_by_steps(verts[0], r as isize)),
+            self.get_vert_at(self.rotate_point_by_steps(verts[1], r as isize)),
+            self.get_vert_at(self.rotate_point_by_steps(verts[2], r as isize)),
+            self.get_vert_at(self.rotate_point_by_steps(verts[3], r as isize)),
+        ];
+        // Check if this box has the same set of vertices as an existing `SourceBox`.  It's fine to
+        // use set comparisons on the `VertIdx`s; states other than rotations/reflections are
+        // impossible because they would require one of the boxes to be self-intersecting.
+        let mut sorted_indices = vert_idxs.to_vec();
+        sorted_indices.sort();
+        let existing_box = self.source_boxes().find(|&(_idx, source_box)| {
+            let mut sorted_indices_2 = source_box.vert_idxs.to_vec();
+            sorted_indices_2.sort();
+            sorted_indices == sorted_indices_2
+        });
+        // Create the new box, and add it
+        let new_box = if let Some((source_idx, _source_box)) = existing_box {
+            // If there's already a box in this location, create a reference to it
+            //
+            // TODO: Compute the edge transformation that connects the two boxes
+            Box_::Ref {
+                source_idx,
+                symmetry_position,
+            }
+        } else {
+            // If this box isn't the same as any existing box, then create a new `SourceBox`
+            Box_::Source(SourceBox {
+                vert_idxs,
+                rotate_direction,
+                symmetry_position,
+            })
+        };
+        self.boxes.push(new_box)
+    }
+
+    /// Return an iterator over the [`SourceBox`]es, and their indices
+    fn source_boxes(&self) -> impl Iterator<Item = (BoxIdx, &SourceBox)> {
+        self.boxes
+            .indexed_iter()
+            .filter_map(|(idx, box_)| match box_ {
+                Box_::Source(s) => Some((idx, s)),
+                Box_::Ref { .. } => None,
+            })
+    }
+
+    /// Return an iterator over the [`SourceBox`]es, and their indices
+    fn source_boxes_mut(&mut self) -> impl Iterator<Item = (BoxIdx, &mut SourceBox)> {
+        self.boxes
+            .indexed_iter_mut()
+            .filter_map(|(idx, box_)| match box_ {
+                Box_::Source(s) => Some((idx, s)),
+                Box_::Ref { .. } => None,
+            })
+    }
+
     /// Gets the two vertex positions on either end of some [`Side`] of a [`Box_`], in clockwise
     /// order.
     fn vert_positions_of_edge(&self, box_idx: BoxIdx, side: Side) -> Result<(V2, V2), BoxAddError> {
         let (vert_idx1, vert_idx2) = self
-            .boxes
-            .get(box_idx)
+            .get_source_box(box_idx)
             .ok_or(BoxAddError::InvalidBoxIdx(box_idx))?
             .get_edge_verts(side);
         Ok((self.verts[vert_idx1], self.verts[vert_idx2]))
@@ -534,15 +600,55 @@ impl Not for LinkSide {
 
 /* BOX */
 
-/// A box of cells.  This is guaranteed to be non-intersecting (and all the box creation methods
-/// check this)
+/// A box of cells.  Every box must include every rotational/reflectional equivalent with separate
+/// indices.  However, this sometimes results in many boxes sharing the same set of 4 vertices,
+/// which would make the [`Shape`] generator attach all of these boxes to the same set of edges
+/// (resulting in a build error).
+///
+/// To allow for this, whenever a set of overlapping boxes like this is found, we store one
+/// [`SourceBox`] (the one with the lowest index, and the one which will be built into the
+/// [`Shape`]) while the rest are stored as [`Box_::Ref`]s pointing back to the [`Source`].  We
+/// make sure that reference cycles are impossible by requiring that [`Box_::Ref`]s always refer to
+/// boxes with a [`BoxIdx`] strictly smaller than their own.
 #[derive(Debug, Clone)]
-struct Box_ {
-    /// The indices of the vertices of this corner.  These are defined to be listed in clockwise
-    /// order with the 0th element being the 'bottom-left' corner.
+enum Box_ {
+    /// There are no boxes with a lower [`BoxIdx`] that share the same vertices
+    Source(SourceBox),
+    /// This box is a rotation or reflection of another box with a smaller [`BoxIdx`].
+    Ref {
+        /// The index of the `Box_` with which this shares a set of vertices
+        source_idx: BoxIdx,
+        /// The position of this `Box_` within the symmetry of the [`Shape`] being built
+        symmetry_position: SymmetryPosition,
+    },
+}
+
+impl Box_ {
+    /// Gets the position of this `Box_` within the symmetry of the shape
+    fn symmetry_position(&self) -> SymmetryPosition {
+        match self {
+            Box_::Source(SourceBox {
+                symmetry_position, ..
+            }) => *symmetry_position,
+            Box_::Ref {
+                symmetry_position, ..
+            } => *symmetry_position,
+        }
+    }
+}
+
+/// A [`Box_`] which will become part of the resulting [`Shape`]
+#[derive(Debug, Clone)]
+struct SourceBox {
+    /// The indices of the vertices of this box.  These are defined to be going clockwise from the
+    /// 'bottom left' of the box.
+    ///
+    /// In reality, it's totally fine for people to rotate or
+    /// reflect boxes (thus moving the 'bottom left' corner to some other direction), but this way
+    /// we always have a consistent way to refer to the sides of boxes.  Additionally, the boxes
+    /// may be reflected (possibly in the case of reflectional symmetry) which is fine for a
+    /// `Builder` but not for a [`Shape`] (this is handled by [`Builder::build`]).
     vert_idxs: [VertIdx; 4],
-    equiv_class: SymmIdx,
-    rotation_within_equiv_class: usize,
     /// In which direction the vertices are specified.  We maintain the invariant that symmetric
     /// versions of boxes should have symmetric edge labellings, so in the case of reflectional
     /// symmetry this requires us to create clockwise/anticlockwise pairs of boxes:
@@ -551,7 +657,7 @@ struct Box_ {
     ///                    |
     ///    0 ------- 1     |     1 ------- 0
     ///    |  ---->  |     |     |  <----  |
-    ///    | ^     | |     |     | |     ^ |
+    ///    | Λ     | |     |     | |     Λ |
     ///    | |     V |     |     | V     | |
     ///    |  <----  |     |     |  ---->  |
     ///    3 ------- 2     |     2 ------- 3
@@ -559,11 +665,17 @@ struct Box_ {
     ///               MIRROR LINE
     /// ```
     rotate_direction: RotateDirection,
+    /// The position of this `Box_` within the symmetry of the [`Shape`] being built
+    symmetry_position: SymmetryPosition,
 }
 
-impl Box_ {
+impl SourceBox {
     /// Swaps the direction of the vertices (so they go from clockwise order to anti-clockwise or
     /// vice versa), preserving the lengths of each side.
+    ///
+    /// # Panics
+    ///
+    /// This panics if `self` is not a [`BoxType::Source`]
     fn swap_direction(&mut self) {
         self.vert_idxs.swap(0, 1); // Reverse left edge
         self.vert_idxs.swap(2, 3); // Reverse right edge
@@ -580,6 +692,16 @@ impl Box_ {
             .nth(side.index())
             .unwrap()
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct SymmetryPosition {
+    /// The class of symmetrically equivalent boxes that this box is part of.  This is used (with
+    /// [`Box_::rotation_within_equiv_class`]) to both compute the puzzle's symmetry and in
+    /// [`Builder::rotational_copy_of`].
+    equiv_class_idx: SymmIdx,
+    /// Which index within `bdr.equiv_classes[self.equiv_class]` contains the index of this `Box_`.
+    rotation_within_equiv_class: usize,
 }
 
 /// The possible ways that generating a box can fail
@@ -632,6 +754,22 @@ impl Not for RotateDirection {
             Self::Clockwise => Self::AntiClockwise,
             Self::AntiClockwise => Self::Clockwise,
         }
+    }
+}
+
+impl Not for &RotateDirection {
+    type Output = RotateDirection;
+
+    fn not(self) -> Self::Output {
+        !*self
+    }
+}
+
+impl Not for &mut RotateDirection {
+    type Output = RotateDirection;
+
+    fn not(self) -> Self::Output {
+        !*self
     }
 }
 

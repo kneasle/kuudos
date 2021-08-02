@@ -105,6 +105,16 @@ impl<Idx, T> TypedVec<Idx, T> {
             .map(|(i, v)| (Idx::from_idx(i), v))
     }
 
+    pub fn indexed_iter_mut(&mut self) -> impl Iterator<Item = (Idx, &mut T)>
+    where
+        Idx: IdxType,
+    {
+        self.inner
+            .iter_mut()
+            .enumerate()
+            .map(|(i, v)| (Idx::from_idx(i), v))
+    }
+
     pub fn map<U>(&self, f: impl Fn(&T) -> U) -> TypedVec<Idx, U> {
         TypedVec {
             inner: self.inner.iter().map(f).collect_vec(),
@@ -142,7 +152,7 @@ impl<IdxT: IdxType, T> IndexMut<IdxT> for TypedVec<IdxT, T> {
 
 macro_rules! idx_impl {
     ($idx_name: ident, $vec_name: ident) => {
-        /// An index type used for referring to vertices
+        // Define index type
         #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub struct $idx_name {
             idx: usize,
@@ -158,13 +168,14 @@ macro_rules! idx_impl {
             }
         }
 
-        pub type $vec_name<T> = TypedVec<$idx_name, T>;
-
         impl Debug for $idx_name {
             fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
                 write!(f, "{}({})", stringify!($idx_name), self.idx)
             }
         }
+
+        // Define vec type alias
+        pub type $vec_name<T> = TypedVec<$idx_name, T>;
     };
 }
 

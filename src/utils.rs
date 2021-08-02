@@ -254,9 +254,9 @@ impl V2Ext for V2 {
     fn rotate(self, angle: impl Angle<f32> + Copy) -> Self {
         let sin = angle.sin();
         let cos = angle.cos();
-        // Rotation **clockwise** corresponds to multiplication by the following matrix (which looks
-        // like the classic anti-clockwise matrix because our y-axis goes down where the one in maths
-        // goes up):
+        // Rotation **clockwise** corresponds to multiplication by the following matrix (which is
+        // identical to the classic **anti-clockwise** matrix because our y-axis goes down where
+        // the one in maths traditionally goes up):
         // | cos(angle)  -sin(angle) |
         // | sin(angle)   cos(angle) |
         V2 {

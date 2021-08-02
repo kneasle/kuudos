@@ -101,9 +101,9 @@ pub enum BuildError {
 /// Reorder the vertices in each box so that the vertices are always specified in clockwise
 /// order.
 fn normalise_box_direction(bdr: &mut Builder) {
-    for box_ in bdr.boxes.iter_mut() {
-        if box_.rotate_direction == RotateDirection::AntiClockwise {
-            box_.swap_direction();
+    for (_idx, source_box) in bdr.source_boxes_mut() {
+        if source_box.rotate_direction == RotateDirection::AntiClockwise {
+            source_box.swap_direction();
         }
     }
 }
@@ -125,13 +125,16 @@ fn generate_edges(bdr: &Builder) -> Result<(EdgeVec<Edge>, BoxEdgeMap, LinkEdgeM
     // the 2nd box of that `Edge`.
     let mut edge_map = HashMap::<(VertIdx, VertIdx), EdgeIdx>::new();
 
-    for (box_idx, box_) in bdr.boxes.indexed_iter() {
-        assert_eq!(box_.rotate_direction, RotateDirection::Clockwise);
+    for (box_idx, source_box) in bdr.source_boxes() {
+        assert_eq!(source_box.rotate_direction, RotateDirection::Clockwise);
 
         // These indices will make the current box on the right of
         // `edges[(vert_idx_bottom, vert_idx_top)]`.
-        for (side_idx, (&vert_idx_bottom, &vert_idx_top)) in
-            box_.vert_idxs.iter().circular_tuple_windows().enumerate()
+        for (side_idx, (&vert_idx_bottom, &vert_idx_top)) in source_box
+            .vert_idxs
+            .iter()
+            .circular_tuple_windows()
+            .enumerate()
         {
             // Which side of the box this edge is attaching to
             let side = match side_idx {
@@ -286,10 +289,10 @@ fn generate_cell_vertices(
     let mut cell_vert_indices = HashMap::<(BoxIdx, usize, usize), VertIdx>::new();
 
     // Add the box's vertices as cell vertices
-    for (box_idx, box_) in bdr.boxes.indexed_iter() {
+    for (box_idx, source_box) in bdr.source_boxes() {
         // Single-letter variable/direction names make the `insert` statements line up nicely,
         // which I think is a net increase in readability
-        let [bl_idx, tl_idx, tr_idx, br_idx] = box_.vert_idxs;
+        let [bl_idx, tl_idx, tr_idx, br_idx] = source_box.vert_idxs;
         let w = bdr.box_width;
         let h = bdr.box_height;
         cell_vert_indices.insert((box_idx, 0, 0), bl_idx); // Bottom left
@@ -327,8 +330,8 @@ fn generate_cell_vertices(
     }
 
     // Add central vertices of each box
-    for (box_idx, box_) in bdr.boxes.indexed_iter() {
-        let [bl_idx, tl_idx, tr_idx, br_idx] = box_.vert_idxs;
+    for (box_idx, source_box) in bdr.source_boxes() {
+        let [bl_idx, tl_idx, tr_idx, br_idx] = source_box.vert_idxs;
         // Unpack the locations of the corner vertices
         let bl_pos = bdr.verts[bl_idx];
         let tl_pos = bdr.verts[tl_idx];
@@ -366,7 +369,7 @@ fn generate_cells(
 ) -> (CellVec<Vec<VertIdx>>, HashMap<CellCoord, CellIdx>) {
     let mut cells = CellVec::<Vec<VertIdx>>::new();
     let mut cell_vert_idxs = HashMap::<CellCoord, CellIdx>::new();
-    for (box_idx, _box) in bdr.boxes.indexed_iter() {
+    for (box_idx, _box) in bdr.source_boxes() {
         for x in 0..bdr.box_width {
             for y in 0..bdr.box_height {
                 // Compute the coord and vertex indices
@@ -454,7 +457,7 @@ fn generate_groups<'e>(
     let mut groups = Vec::<Group>::new();
 
     // Group cells into boxes (no graph traversal required)
-    for (box_idx, _box) in bdr.boxes.indexed_iter() {
+    for (box_idx, _box) in bdr.source_boxes() {
         let cells = (0..bdr.box_width)
             .cartesian_product(0..bdr.box_height)
             .map(|(x, y)| cell_idx_by_coord[&CellCoord { box_idx, x, y }])
@@ -513,8 +516,9 @@ fn generate_groups<'e>(
 
 /// Traverse a path starting by entering a box at a given [`Edge`].  This returns a list of
 /// `(box_idx, side_entered)`.  **NOTE**: This will not traverse backwards from `start_edge`, so
-/// it's up to the caller to check that this edge is either 'external' (i.e. is only connected to one
-/// box or link) or is part of a cyclic path.  This will panic if a non-conforming edge is given.
+/// it's up to the caller to check that this edge is either 'external' (i.e. is only connected to
+/// one box or link) or is part of a cyclic path.  This will panic if a non-conforming edge is
+/// given.
 fn traverse_path_forward(
     edges: &EdgeVec<Edge>,
     start_edge: &Edge,
@@ -572,14 +576,14 @@ fn traverse_path_forward(
                     // If there's nothing connected to the other side of the edge, then we've
                     // reached the end of the path
                     None => {
-                        // Mark this last edge as traversed. If this isn't done, the entire path would
-                        // be traversed again (but going in the opposite direction).
+                        // Mark this last edge as traversed. If this isn't done, the entire path
+                        // would be traversed again (but going in the opposite direction).
                         assert!(untraversed_edges.remove(new_edge));
                         // We now know that this path is non-cyclic, so check that the starting
                         // edge only bordered one side (otherwise the path is invalid)
                         assert!(start_edge.connection_left.is_none());
-                        // If the edge doesn't have a left side then we've finished the path, so should
-                        // break the loop
+                        // If the edge doesn't have a left side then we've finished the path, so
+                        // should break the loop
                         break;
                     }
                 }
