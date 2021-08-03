@@ -8,11 +8,11 @@ use crate::{
 use angle::{Angle, Deg};
 use itertools::Itertools;
 
-mod gen_shape;
+mod build;
 mod svg;
 
 /// Re-export [`BuildError`] to the rest of the code.  This is then re-re-exported in `lib.rs`
-pub use gen_shape::BuildError;
+pub use build::BuildError;
 
 /// A struct for programmatically building complex `Shapes`
 #[derive(Debug, Clone)]
@@ -346,7 +346,7 @@ impl Builder {
 
     /// Converts this `Builder` into a [`Shape`] and the associated [`Symmetry`]
     pub fn build(self) -> Result<(Shape, Symmetry), BuildError> {
-        gen_shape::build(self)
+        build::build(self)
     }
 
     /* Internal helpers */
