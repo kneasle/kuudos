@@ -17,7 +17,7 @@ const VALUE_NAMES: &str = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqr
 fn main() {
     let (shape, clues, soln) = if true {
         // let s = Shape::star2x2(5, PI);
-        let builder = shapes::rot_sym_classic().unwrap();
+        let builder = shapes::nine_mens_morris().unwrap();
         std::fs::write("bdr.svg", builder.as_svg(40.0)).unwrap();
 
         let (s, symm) = builder.build().unwrap();
@@ -91,17 +91,19 @@ mod shapes {
     };
 
     pub fn nine_mens_morris() -> Result<Builder, BoxAddError> {
+        const LINK_DEPTH: f32 = 0.2;
+
         let mut bdr = Builder::new(3, 3, 4);
 
         // Add line(s) of connected cells
         let line_box_1 = bdr.add_box_square(V2::UP * 3.0, 1.0, Deg(0.0));
-        let line_box_2 = bdr.extrude_edge(line_box_1, Side::Top)?;
-        let line_box_3 = bdr.extrude_edge(line_box_2, Side::Top)?;
+        let line_box_2 = bdr.extrude_edge_with_opts(line_box_1, Side::Top, 1.0, LINK_DEPTH)?;
+        let line_box_3 = bdr.extrude_edge_with_opts(line_box_2, Side::Top, 1.0, LINK_DEPTH)?;
         // Add diagonal line(s) of 'floating' cells
         let up_right = V2::UP + V2::RIGHT;
         bdr.add_box_square(up_right * 3.0, 1.0, Deg(0.0));
-        let corner_box_2 = bdr.add_box_square(up_right * 6.0, 1.0, Deg(0.0));
-        let corner_box_3 = bdr.add_box_square(up_right * 9.0, 1.0, Deg(0.0));
+        let corner_box_2 = bdr.add_box_square(up_right * (6.0 + LINK_DEPTH), 1.0, Deg(0.0));
+        let corner_box_3 = bdr.add_box_square(up_right * (9.0 + LINK_DEPTH * 2.0), 1.0, Deg(0.0));
         // Link the lines of boxes
         bdr.link_edges(
             line_box_2,
@@ -250,9 +252,8 @@ mod shapes {
         let mut bdr = Builder::new(3, 3, 4);
         // We build the top-right corner, and let the symmetry expand the rest
         let central_box = bdr.add_box_parallelogram(V2::ZERO, V2::UP, V2::RIGHT)?;
-        let right_box =
-            bdr.extrude_edge_with_opts(central_box, Side::Right, 1.0, Some(LINK_DEPTH))?;
-        let top_box = bdr.extrude_edge_with_opts(right_box, Side::Top, 1.0, Some(LINK_DEPTH))?;
+        let right_box = bdr.extrude_edge_with_opts(central_box, Side::Right, 1.0, LINK_DEPTH)?;
+        let top_box = bdr.extrude_edge_with_opts(right_box, Side::Top, 1.0, LINK_DEPTH)?;
         bdr.link_edges(
             top_box,
             Side::Left,
@@ -326,7 +327,7 @@ mod shapes {
             V2::RIGHT,
         )?;
 
-        let orbiting_face = bdr.extrude_edge_with_opts(horiz_box, Side::Right, 1.0, Some(1.4))?;
+        let orbiting_face = bdr.extrude_edge_with_opts(horiz_box, Side::Right, 1.0, 1.4)?;
         bdr.link_edges(
             orbiting_face,
             Side::Bottom,

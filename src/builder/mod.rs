@@ -169,7 +169,7 @@ impl Builder {
     /// Adds a new box which extends outwards from a given edge.  The new box always has the same
     /// orientation as the box being extruded.
     pub fn extrude_edge(&mut self, box_idx: BoxIdx, side: Side) -> Result<BoxIdx, BoxAddError> {
-        self.extrude_edge_with_opts(box_idx, side, 1.0, None)
+        self.extrude_edge_with_opts(box_idx, side, 1.0, 0.0)
     }
 
     /// Adds a new box which extends outwards from a given edge, with extra options.  The new box
@@ -179,7 +179,7 @@ impl Builder {
         box_idx: BoxIdx,
         side: Side,
         extruded_cell_height: f32,
-        link_height: Option<f32>,
+        link_height: f32,
     ) -> Result<BoxIdx, BoxAddError> {
         // Extract the vertices of the side being extruded
         let (v1, v2) = self.vert_positions_of_edge(box_idx, side)?;
@@ -191,7 +191,7 @@ impl Builder {
             edge_direction / self.box_size_in_direction(side.direction()) as f32;
 
         // Create a new box at the right distance from the source box
-        let bottom_left_corner = v1 + normal * link_height.unwrap_or(0.0);
+        let bottom_left_corner = v1 + normal * link_height;
         let new_box = self
             .add_box_parallelogram_rotated(
                 bottom_left_corner,
@@ -201,8 +201,8 @@ impl Builder {
             )
             // This unwrap is safe because the resulting box will always be well-defined
             .unwrap();
-        // Add an edge link, if needed
-        if link_height.is_some() {
+        // Add an edge link, if needed (it's needed if link_height isn't 0)
+        if link_height > 0.0000001 {
             self.link_edges(
                 box_idx,
                 side,
