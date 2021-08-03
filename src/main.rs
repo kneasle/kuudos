@@ -17,7 +17,7 @@ const VALUE_NAMES: &str = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqr
 fn main() {
     let (shape, clues, soln) = if true {
         // let s = Shape::star2x2(5, PI);
-        let builder = shapes::nine_mens_morris().unwrap();
+        let builder = shapes::useless_wheel().unwrap();
         std::fs::write("bdr.svg", builder.as_svg(40.0)).unwrap();
 
         let (s, symm) = builder.build().unwrap();
@@ -28,7 +28,7 @@ fn main() {
             naive::Config::default(),
             puzzle_gen::Config::default(),
         )
-        .generate()
+        .generate_from_seed(0)
         .unwrap();
         (s, clues, soln)
     } else {

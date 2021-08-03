@@ -1,5 +1,6 @@
 use itertools::Itertools;
 use rand::prelude::*;
+use rand_chacha::ChaCha8Rng;
 
 use crate::{
     indexed_vec::{CellIdx, IdxType},
@@ -38,15 +39,24 @@ impl<'shp, 'symm, F: Solver<'shp>, S: MultipleSolnSolver<'shp>> PuzzleGen<'shp, 
         }
     }
 
-    /// Generate a grid, returning `None` if the solvers always failed
+    /// Generates a completely random grid
     pub fn generate(&self) -> Option<(Grid, Solution)> {
+        self.generate_with_rng(&mut thread_rng())
+    }
+
+    /// Generates a grid from a given seed.  `None` will pick a random seed
+    pub fn generate_from_seed(&self, seed: u64) -> Option<(Grid, Solution)> {
+        self.generate_with_rng(&mut ChaCha8Rng::seed_from_u64(seed))
+    }
+
+    /// Generate a grid, returning `None` if the solvers always failed
+    pub fn generate_with_rng(&self, rng: &mut impl Rng) -> Option<(Grid, Solution)> {
         let empty_grid: Grid = vec![None; self.shape.num_cells()];
-        let mut rng = thread_rng();
         let mut best_puzzle: Option<(usize, Grid, Solution)> = None;
         // Repeatedly fill the empty grid
         for _ in 0..self.config.num_grids {
             let filled_grid = self.grid_filler.solve(&empty_grid).ok()?;
-            self.gen_puzzles_from_grid(&filled_grid, &mut rng, &mut best_puzzle);
+            self.gen_puzzles_from_grid(&filled_grid, rng, &mut best_puzzle);
         }
         // Extract the best grid and return it if it exists
         best_puzzle.map(|(_score, grid, soln)| (grid, soln))
@@ -56,14 +66,14 @@ impl<'shp, 'symm, F: Solver<'shp>, S: MultipleSolnSolver<'shp>> PuzzleGen<'shp, 
     fn gen_puzzles_from_grid(
         &self,
         filled_grid: &[usize],
-        rng: &mut ThreadRng,
+        rng: &mut impl Rng,
         best_puzzle: &mut Option<(usize, Grid, Solution)>,
     ) {
         // Equivalence classes nearer to the start of this list will be removed first
         let equiv_classes = {
-            let mut cs = self.symmetry.equiv_classes().to_vec();
-            cs.shuffle(rng);
-            cs
+            let mut ecs = self.symmetry.equiv_classes().to_vec();
+            ecs.shuffle(rng);
+            ecs
         };
         let mut clues = filled_grid.iter().copied().map(Some).collect_vec(); // Start with a full grid
         let mut num_solver_runs = 0; // Accumulator to track how many times the solver has been run

@@ -81,6 +81,7 @@ dependencies = [
  "itertools",
  "num-complex",
  "rand",
+ "rand_chacha",
  "rgb",
  "simple-xml-builder",
  "vector2d",

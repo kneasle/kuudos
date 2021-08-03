@@ -397,7 +397,8 @@ impl Symmetry {
     }
 
     /// Creates a new `Symmetry` where cells who's assignments are equal will be in the same
-    /// equivalence class.
+    /// equivalence class.  The equivalence classes are always generated in a deterministic (but
+    /// unspecified) order.
     pub fn from_cell_assignments<T: Eq + Hash>(cell_assignments: impl Iterator<Item = T>) -> Self {
         let mut cells_per_assignment = HashMap::<T, Vec<CellIdx>>::new();
         // Invariant: `cells_per_assignment[v]` contains the indices of all the cells yielded so
@@ -408,12 +409,18 @@ impl Symmetry {
                 .or_insert_with(Vec::new)
                 .push(CellIdx::from_idx(idx));
         }
-        Self {
-            cell_equiv_classes: cells_per_assignment
-                .into_iter()
-                .map(|(_k, v)| v)
-                .collect_vec(),
+        // Sort the equivalence classes by their minimum cell, thus making sure their order is
+        // deterministic
+        let mut cell_equiv_classes = cells_per_assignment
+            .into_iter()
+            .map(|(_k, v)| v)
+            .collect_vec();
+        for class in &mut cell_equiv_classes {
+            class.sort(); // Sort the cell indices in each equiv class
         }
+        cell_equiv_classes.sort(); // Sort the equivalence classes themselves
+
+        Self { cell_equiv_classes }
     }
 
     /// Each sub-list contains indices of cells which must be either all be clues or all be blank.
