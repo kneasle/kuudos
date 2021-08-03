@@ -50,32 +50,30 @@ fn main() {
         (s, clues, soln)
     };
 
-    let display_type = DisplayType::Clues;
-
-    // Write the shape to an SVG file
-    let svg = shape.svg_string(
-        &RenderingOpts::default(),
-        40.0,
-        // Label the cells with alpha-numeric characters
-        &match display_type {
-            DisplayType::Clues => clues
-                .iter()
-                .map(|x| x.map(|v| VALUE_NAMES.chars().nth(v).unwrap()))
-                .collect_vec(),
-            DisplayType::Solution => soln
-                .iter()
-                .map(|digit| VALUE_NAMES.chars().nth(*digit).unwrap())
-                .map(Some)
-                .collect_vec(),
-            DisplayType::CellNames => VALUE_NAMES
-                .chars()
-                .cycle()
-                .take(shape.num_cells())
-                .map(Some)
-                .collect_vec(),
-        },
-    );
-    std::fs::write("classic.svg", svg).unwrap();
+    // Write SVG files of the shape's clues, cell numbering and solution
+    let clue_vec = clues
+        .iter()
+        .map(|x| x.map(|v| VALUE_NAMES.chars().nth(v).unwrap()))
+        .collect_vec();
+    let soln_vec = soln
+        .iter()
+        .map(|digit| VALUE_NAMES.chars().nth(*digit).unwrap())
+        .map(Some)
+        .collect_vec();
+    let cell_name_vec = VALUE_NAMES
+        .chars()
+        .cycle()
+        .take(shape.num_cells())
+        .map(Some)
+        .collect_vec();
+    // Generate all the files
+    let write_svg_str = |clues: Vec<Option<char>>, path: &str| {
+        let svg_str = shape.svg_string(&RenderingOpts::default(), 40.0, &clues);
+        std::fs::write(path, svg_str).unwrap();
+    };
+    write_svg_str(clue_vec, "puzzle.svg");
+    write_svg_str(soln_vec, "soln.svg");
+    write_svg_str(cell_name_vec, "cells.svg");
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
