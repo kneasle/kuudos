@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use itertools::Itertools;
 
 use crate::{
-    indexed_vec::{BoxIdx, CellIdx, CellVec, EdgeIdx, EdgeVec, LinkIdx, VertIdx, VertVec},
+    indexed_vec::{BoxIdx, CellIdx, CellVec, EdgeIdx, EdgeVec, IdxType, LinkIdx, VertIdx, VertVec},
     shape::{DrawElement, Group, LinkShape},
     Shape, Symmetry, V2,
 };
@@ -35,6 +35,7 @@ pub fn build(mut bdr: Builder) -> Result<(Shape, Symmetry), BuildError> {
         &link_edge_map,
     );
     // Package into a `Shape`
+    let num_cells = cells.len();
     let shape = Shape {
         num_symbols: bdr.box_width * bdr.box_height,
         groups,
@@ -43,7 +44,7 @@ pub fn build(mut bdr: Builder) -> Result<(Shape, Symmetry), BuildError> {
         extra_elements,
     };
     // Generate the symmetry (currently just assume - incorrectly - that there's no symmetry)
-    let symmetry = Symmetry::asymmetric(&shape);
+    let symmetry = generate_symmetry(&bdr, num_cells, &cell_idx_by_coord);
     Ok((shape, symmetry))
 }
 
@@ -504,6 +505,64 @@ fn generate_groups<'e>(
     groups
 }
 
+/// Generate the [`Symmetry`] of the [`Shape`] represented by the [`Builder`].
+fn generate_symmetry(
+    bdr: &Builder,
+    num_cells: usize,
+    cell_idx_by_coord: &HashMap<CellCoord, CellIdx>,
+) -> Symmetry {
+    /* In order to deduce the symmetry, we must first assign each cell into a (not necessarily
+     * unique) equivalence class.  We can (and will) use `Builder`'s equivalence classes of faces,
+     * but this is complicated by the fact that multiple `Box_`es can exist on top of one another -
+     * thus assigning some cells to multiple equivalence classes.  It doesn't make sense to assign
+     * many classes to the same cell, so instead the correct thing to do here is to combine these
+     * multiple equivalence classes into one.  We implement this by making high-indexed classes
+     * dominate lower-indexed ones, and having all classes dominate `None` (this is how `Ord` is
+     * implemented for `Option<T>`). */
+    let mut equiv_class_by_cell: Vec<Option<usize>> = vec![None; num_cells];
+    let mut next_equiv_class_idx = 0;
+    for box_idxs in bdr.box_equiv_classes.iter() {
+        // Iterate over the cell coords **first**, because cells at the same location in different
+        // boxes should be put in the same equivalence class.
+        for x in 0..bdr.box_width {
+            for y in 0..bdr.box_height {
+                // Get the equivalence class index for all the cells in this location
+                let equiv_class_idx = next_equiv_class_idx;
+                next_equiv_class_idx += 1;
+                // For each box in this equiv class of boxes...
+                for &box_idx in box_idxs {
+                    // Get the source box and the transform from the this box
+                    let (source_idx, _source_box, transform) = bdr.get_source_box(box_idx).unwrap();
+                    let (transformed_x, transformed_y) =
+                        transform.transform_coord(bdr.box_width, bdr.box_height, x, y);
+                    // Determine which cell this coordinate belongs to
+                    let cell_coord = CellCoord {
+                        box_idx: source_idx,
+                        x: transformed_x,
+                        y: transformed_y,
+                    };
+                    let cell_idx = cell_idx_by_coord.get(&cell_coord).unwrap();
+                    // Note that this cell belongs to this equiv_class
+                    let equiv_class = &mut equiv_class_by_cell[cell_idx.to_idx()];
+                    *equiv_class = (*equiv_class).max(Some(equiv_class_idx));
+                }
+            }
+        }
+    }
+    // Ever cell must have come from a box, so no cell can be left without an equivalence class
+    // once all boxes have been iterated over
+    assert!(equiv_class_by_cell.iter().all(Option::is_some));
+    // Build a `Symmetry` from this cell assignment
+    Symmetry::from_cell_assignments(equiv_class_by_cell.iter())
+}
+
+//////////////////////
+// HELPER FUNCTIONS //
+//////////////////////
+
+type BoxEdgeMap = HashMap<(BoxIdx, Side), (EdgeIdx, EdgeSide)>;
+type LinkEdgeMap = HashMap<(LinkIdx, LinkSide), (EdgeIdx, EdgeSide)>;
+
 /// Traverse a path starting by entering a box at a given [`Edge`].  This returns a list of
 /// `(box_idx, side_entered)`.  **NOTE**: This will not traverse backwards from `start_edge`, so
 /// it's up to the caller to check that this edge is either 'external' (i.e. is only connected to
@@ -591,13 +650,6 @@ fn traverse_path_forward(
 
     box_path
 }
-
-//////////////////////
-// HELPER FUNCTIONS //
-//////////////////////
-
-type BoxEdgeMap = HashMap<(BoxIdx, Side), (EdgeIdx, EdgeSide)>;
-type LinkEdgeMap = HashMap<(LinkIdx, LinkSide), (EdgeIdx, EdgeSide)>;
 
 /// Convert a path through boxes into a set of lanes of cells which form the groups down that path
 fn get_lanes_down_path(

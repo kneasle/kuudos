@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::hash::Hash;
 
 use angle::{Angle, Deg, Rad};
 use itertools::Itertools;
@@ -391,6 +392,26 @@ impl Symmetry {
         Self {
             cell_equiv_classes: (0..shape.num_cells())
                 .map(|idx| vec![CellIdx::from_idx(idx)])
+                .collect_vec(),
+        }
+    }
+
+    /// Creates a new `Symmetry` where cells who's assignments are equal will be in the same
+    /// equivalence class.
+    pub fn from_cell_assignments<T: Eq + Hash>(cell_assignments: impl Iterator<Item = T>) -> Self {
+        let mut cells_per_assignment = HashMap::<T, Vec<CellIdx>>::new();
+        // Invariant: `cells_per_assignment[v]` contains the indices of all the cells yielded so
+        // far which were assigned to `v`
+        for (idx, v) in cell_assignments.enumerate() {
+            cells_per_assignment
+                .entry(v)
+                .or_insert_with(Vec::new)
+                .push(CellIdx::from_idx(idx));
+        }
+        Self {
+            cell_equiv_classes: cells_per_assignment
+                .into_iter()
+                .map(|(_k, v)| v)
                 .collect_vec(),
         }
     }

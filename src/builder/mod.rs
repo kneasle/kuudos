@@ -354,7 +354,7 @@ impl Builder {
     /// Gets the [`SourceBox`] at a given [`BoxIdx`], following [`Box_::Ref`]s if necessary.  This
     /// also returns the transformation required to map [`Side`]s of the box at the given index to
     /// edges in the given [`SourceBox`].  Returns `None` if no box is indexed by [`BoxIdx`].
-    fn get_source_box(&self, mut box_idx: BoxIdx) -> Option<(&SourceBox, EdgeTransform)> {
+    fn get_source_box(&self, mut box_idx: BoxIdx) -> Option<(BoxIdx, &SourceBox, EdgeTransform)> {
         let mut transform = EdgeTransform::identity();
         // This loop will always terminate because we require that:
         // 1. Reference chains must eventually reach a `Box_::Source` (because `Box_::Ref`s are
@@ -374,7 +374,7 @@ impl Builder {
                     transform = transform.sequence(*edge_transform);
                 }
                 // If the box is a source, then return the contained `SourceBox`.
-                Box_::Source(source) => return Some((source, transform)),
+                Box_::Source(source) => return Some((box_idx, source, transform)),
             }
         }
     }
@@ -442,10 +442,10 @@ impl Builder {
     /// Gets the two vertex positions on either end of some [`Side`] of a [`Box_`], in clockwise
     /// order.
     fn vert_positions_of_edge(&self, box_idx: BoxIdx, side: Side) -> Result<(V2, V2), BoxAddError> {
-        let (source_box, edge_transform) = self
+        let (_source_idx, source_box, edge_transform) = self
             .get_source_box(box_idx)
             .ok_or(BoxAddError::InvalidBoxIdx(box_idx))?;
-        let (vert_idx1, vert_idx2) = source_box.get_edge_verts(edge_transform.transform(side));
+        let (vert_idx1, vert_idx2) = source_box.get_edge_verts(edge_transform.transform_side(side));
         Ok((self.verts[vert_idx1], self.verts[vert_idx2]))
     }
 
@@ -919,16 +919,37 @@ impl EdgeTransform {
     fn sequence(self, other: Self) -> Self {
         Self {
             is_reflection: self.is_reflection != other.is_reflection, // Two reflections cancel out
-            left_location: other.transform(self.left_location), // Track where `Left` will end up
+            left_location: other.transform_side(self.left_location), // Track where `Left` will end up
         }
     }
 
     /// Find the [`Side`] of an edge after `self` has been applied
-    fn transform(self, mut side: Side) -> Side {
+    fn transform_side(self, mut side: Side) -> Side {
         if self.is_reflection {
             side = side.flip_horizontal(); // Apply the horizontal reflection
         }
         side.rotate(self.left_location) // Apply the rotation
+    }
+
+    /// Find the [`Side`] of an edge after `self` has been applied
+    fn transform_coord(self, width: usize, height: usize, x: usize, y: usize) -> (usize, usize) {
+        // Reflect the x-coordinate if needed
+        let refl_x = if self.is_reflection { width - 1 - x } else { x };
+        let refl_y = y;
+        // If the width and height of the boxes are different, then doing a 90* rotation would map
+        // the edges to outside the box.
+        assert!(!(width != height && matches!(self.left_location, Side::Top | Side::Bottom)));
+        // Rotate the coordinates
+        match self.left_location {
+            // No rotation
+            Side::Left => (refl_x, refl_y),
+            // 90* clockwise rotation
+            Side::Top => (refl_y, width - 1 - refl_x),
+            // 180* rotation
+            Side::Right => (width - 1 - refl_x, height - 1 - refl_y),
+            // 90* anti-clockwise rotation
+            Side::Bottom => (width - 1 - refl_y, refl_x),
+        }
     }
 }
 

@@ -92,7 +92,7 @@ impl<'shp, 'symm, F: Solver<'shp>, S: MultipleSolnSolver<'shp>> PuzzleGen<'shp, 
     ) {
         // Early return if there are no more equivalence classes to remove (i.e. we've reached the
         // max recursion depth)
-        if depth == filled_grid.len() {
+        if depth == equiv_classes.len() {
             return;
         }
         // Stop the search if we've run the solver too many times
