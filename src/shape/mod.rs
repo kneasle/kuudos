@@ -377,10 +377,11 @@ pub struct Edge {
 /// same equivalence class must either be all clues or all blanks).
 #[derive(Debug, Clone)]
 pub struct Symmetry {
-    /// For each cell, this maps to an equivalence class index in the range `0..self.num_equiv_classes`
-    cell_equiv_classes: Vec<usize>,
-    /// How many unique equivalence classes this `Symmetry` contains
-    num_equiv_classes: usize,
+    /// List of groups of cells which are symmetrically equivalent.
+    ///
+    /// **Invariant**: This must represent a partition over the cells - i.e. every [`CellIdx`] must
+    /// appear exactly once in these equivalence classes.
+    cell_equiv_classes: Vec<Vec<CellIdx>>,
 }
 
 impl Symmetry {
@@ -388,17 +389,14 @@ impl Symmetry {
     /// equivalence class).
     pub fn asymmetric(shape: &Shape) -> Self {
         Self {
-            cell_equiv_classes: (0..shape.num_cells()).collect_vec(),
-            num_equiv_classes: shape.num_cells(),
+            cell_equiv_classes: (0..shape.num_cells())
+                .map(|idx| vec![CellIdx::from_idx(idx)])
+                .collect_vec(),
         }
     }
 
     /// Each sub-list contains indices of cells which must be either all be clues or all be blank.
-    pub fn equiv_classes(&self) -> Vec<Vec<CellIdx>> {
-        let mut equiv_classes = vec![Vec::new(); self.num_equiv_classes];
-        for (cell_idx, &equiv_class_idx) in self.cell_equiv_classes.iter().enumerate() {
-            equiv_classes[equiv_class_idx].push(CellIdx::from_idx(cell_idx));
-        }
-        equiv_classes
+    pub fn equiv_classes(&self) -> &[Vec<CellIdx>] {
+        &self.cell_equiv_classes
     }
 }

@@ -61,13 +61,14 @@ impl<'shp, 'symm, F: Solver<'shp>, S: MultipleSolnSolver<'shp>> PuzzleGen<'shp, 
     ) {
         // Equivalence classes nearer to the start of this list will be removed first
         let equiv_classes = {
-            let mut cs = self.symmetry.equiv_classes();
+            let mut cs = self.symmetry.equiv_classes().to_vec();
             cs.shuffle(rng);
             cs
         };
         let mut clues = filled_grid.iter().copied().map(Some).collect_vec(); // Start with a full grid
         let mut num_solver_runs = 0; // Accumulator to track how many times the solver has been run
 
+        // Recursively remove clues, updating `best_puzzle` with the best puzzle found so far
         self.recursive_remove_clues(
             filled_grid,
             &equiv_classes,
