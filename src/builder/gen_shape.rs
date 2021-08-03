@@ -12,19 +12,16 @@ use crate::{
 
 use super::{Builder, Direction, EdgeLinkStyle, LinkSide, RotateDirection, Side};
 
-/* FUNCTIONS TO EXPORT */
-
-/// Converts this `Builder` into a [`Shape`] and the associated [`Symmetry`]
+/// Converts a `Builder` into a [`Shape`] and the associated [`Symmetry`]
 pub fn build(mut bdr: Builder) -> Result<(Shape, Symmetry), BuildError> {
     // Before we start building the `Shape`, we normalise each box so that the vertices are
-    // always specified in clockwise order.  This also detects pathological box shapes (i.e.
-    // boxes which are builder-intersecting, non-convex or linear).
+    // always specified in clockwise order.
     normalise_box_direction(&mut bdr);
 
     // Generate edges between boxes
     let (edges, box_edge_map, link_edge_map) = generate_edges(&bdr)?;
     // Generate cell vertices
-    let (vert_positions, vert_idx_by_coord) = generate_cell_vertices(&bdr, &edges)?;
+    let (verts, vert_idx_by_coord) = generate_cell_vertices(&bdr, &edges)?;
     // Generate cells
     let (cells, cell_idx_by_coord) = generate_cells(&bdr, &vert_idx_by_coord);
     // Generate extra elements to render the edge links
@@ -42,10 +39,9 @@ pub fn build(mut bdr: Builder) -> Result<(Shape, Symmetry), BuildError> {
         num_symbols: bdr.box_width * bdr.box_height,
         groups,
         cells,
-        verts: vert_positions,
+        verts,
         extra_elements,
     };
-
     // Generate the symmetry (currently just assume - incorrectly - that there's no symmetry)
     let symmetry = Symmetry::asymmetric(&shape);
     Ok((shape, symmetry))
@@ -137,13 +133,7 @@ fn generate_edges(bdr: &Builder) -> Result<(EdgeVec<Edge>, BoxEdgeMap, LinkEdgeM
             .enumerate()
         {
             // Which side of the box this edge is attaching to
-            let side = match side_idx {
-                0 => Side::Left,
-                1 => Side::Top,
-                2 => Side::Right,
-                3 => Side::Bottom,
-                _ => unreachable!("Boxes should only have 4 sides"),
-            };
+            let side = Side::from_index(side_idx);
             let connection = EdgeConnection::Box_(box_idx, side);
             // Number of cells that go down this side of the box
             let length = bdr.box_size_in_direction(side.direction());

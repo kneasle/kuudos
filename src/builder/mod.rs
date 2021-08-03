@@ -1,4 +1,4 @@
-use std::ops::Not;
+use std::{fmt::Debug, ops::Not};
 
 use crate::{
     indexed_vec::{BoxIdx, BoxVec, LinkIdx, LinkVec, SymmIdx, SymmVec, VertIdx, VertVec},
@@ -351,19 +351,30 @@ impl Builder {
 
     /* Internal helpers */
 
-    /// Gets the [`SourceBox`] at a given [`BoxIdx`], following [`Box_::Ref`]s if necessary.
-    fn get_source_box(&self, mut box_idx: BoxIdx) -> Option<&SourceBox> {
+    /// Gets the [`SourceBox`] at a given [`BoxIdx`], following [`Box_::Ref`]s if necessary.  This
+    /// also returns the transformation required to map [`Side`]s of the box at the given index to
+    /// edges in the given [`SourceBox`].  Returns `None` if no box is indexed by [`BoxIdx`].
+    fn get_source_box(&self, mut box_idx: BoxIdx) -> Option<(&SourceBox, EdgeTransform)> {
+        let mut transform = EdgeTransform::identity();
+        // This loop will always terminate because we require that:
+        // 1. Reference chains must eventually reach a `Box_::Source` (because `Box_::Ref`s are
+        //    only ever created when a new box is created on top of an existing `SourceBox`).
+        // 2. Each `Box_::Ref` must refer to a box who's index is strictly smaller than its own.
+        //    Thus, `box_idx` must strictly decrease every iteration and the loop can't execute
+        //    more than `self.boxes.len()` iterations (which is finite).
         loop {
             match self.boxes.get(box_idx)? {
                 // If the box at `box_idx` is a `Ref`, then follow its reference
-                Box_::Ref { source_idx, .. } => box_idx = *source_idx,
-                // If the box is a source, then return the contained `SourceBox`.  This loop must
-                // always terminate because we require that:
-                // 1. Reference chains always reach a `Box_::Source` eventually
-                // 2. Each `Box_::Ref` must refer to a box index that is strictly smaller than its
-                //    own.  Thus, `box_idx` must strictly decrease every iteration and the loop
-                //    can't execute more than `self.boxes.len()` iterations (which is finite).
-                Box_::Source(source) => return Some(source),
+                Box_::Ref {
+                    source_idx,
+                    edge_transform,
+                    ..
+                } => {
+                    box_idx = *source_idx;
+                    transform = transform.sequence(*edge_transform);
+                }
+                // If the box is a source, then return the contained `SourceBox`.
+                Box_::Source(source) => return Some((source, transform)),
             }
         }
     }
@@ -384,23 +395,17 @@ impl Builder {
             self.get_vert_at(self.rotate_point_by_steps(verts[2], r as isize)),
             self.get_vert_at(self.rotate_point_by_steps(verts[3], r as isize)),
         ];
-        // Check if this box has the same set of vertices as an existing `SourceBox`.  It's fine to
-        // use set comparisons on the `VertIdx`s; states other than rotations/reflections are
-        // impossible because they would require one of the boxes to be self-intersecting.
-        let mut sorted_indices = vert_idxs.to_vec();
-        sorted_indices.sort();
-        let existing_box = self.source_boxes().find(|&(_idx, source_box)| {
-            let mut sorted_indices_2 = source_box.vert_idxs.to_vec();
-            sorted_indices_2.sort();
-            sorted_indices == sorted_indices_2
+        // Try to find an existing `SourceBox` which this can be transformed into
+        let existing_box_and_transform = self.source_boxes().find_map(|(idx, source_box)| {
+            EdgeTransform::from_vertex_transform(vert_idxs, source_box.vert_idxs) // Test the edge transform
+                .map(|transform| (idx, transform)) // Return the idx as well
         });
         // Create the new box, and add it
-        let new_box = if let Some((source_idx, _source_box)) = existing_box {
+        let new_box = if let Some((source_idx, edge_transform)) = existing_box_and_transform {
             // If there's already a box in this location, create a reference to it
-            //
-            // TODO: Compute the edge transformation that connects the two boxes
             Box_::Ref {
                 source_idx,
+                edge_transform,
                 symmetry_position,
             }
         } else {
@@ -437,10 +442,10 @@ impl Builder {
     /// Gets the two vertex positions on either end of some [`Side`] of a [`Box_`], in clockwise
     /// order.
     fn vert_positions_of_edge(&self, box_idx: BoxIdx, side: Side) -> Result<(V2, V2), BoxAddError> {
-        let (vert_idx1, vert_idx2) = self
+        let (source_box, edge_transform) = self
             .get_source_box(box_idx)
-            .ok_or(BoxAddError::InvalidBoxIdx(box_idx))?
-            .get_edge_verts(side);
+            .ok_or(BoxAddError::InvalidBoxIdx(box_idx))?;
+        let (vert_idx1, vert_idx2) = source_box.get_edge_verts(edge_transform.transform(side));
         Ok((self.verts[vert_idx1], self.verts[vert_idx2]))
     }
 
@@ -618,6 +623,8 @@ enum Box_ {
     Ref {
         /// The index of the `Box_` with which this shares a set of vertices
         source_idx: BoxIdx,
+        /// The transform mapping [`Side`]s of this box to [`Side`]s of the box at `source_idx`.
+        edge_transform: EdgeTransform,
         /// The position of this `Box_` within the symmetry of the [`Shape`] being built
         symmetry_position: SymmetryPosition,
     },
@@ -800,8 +807,8 @@ impl Side {
         }
     }
 
-    /// Returns the index from `0..4` which this `Side` will appear in the order specified by a
-    /// [`Box_`]
+    /// Returns the index from `0..4` which this `Side` will appear, going clockwise starting from
+    /// [`Side::Left`]
     fn index(self) -> usize {
         match self {
             Side::Left => 0,
@@ -809,5 +816,125 @@ impl Side {
             Side::Right => 2,
             Side::Bottom => 3,
         }
+    }
+
+    /// Inverse of [`Side::index`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index` is greater than `3`
+    fn from_index(index: usize) -> Self {
+        match index {
+            0 => Side::Left,
+            1 => Side::Top,
+            2 => Side::Right,
+            3 => Side::Bottom,
+            _ => panic!("Boxes should only have 4 sides"),
+        }
+    }
+
+    /// Rotate `self` by mapping [`Side::Left`] to a given value
+    fn rotate(self, left_location: Side) -> Self {
+        Self::from_index((self.index() + left_location.index()) % 4)
+    }
+
+    /// Swaps `Left` and `Right`, leaving `Top` and `Bottom` untouched
+    fn flip_horizontal(self) -> Self {
+        match self {
+            Side::Left => Side::Right,
+            Side::Right => Side::Left,
+            x => x,
+        }
+    }
+}
+
+/// A transformation of edge indices, which can be implemented as either rotations or reflections.
+/// These form the elements in the symmetry group of the square, i.e. `D_4`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct EdgeTransform {
+    /// If `true`, then `Left` and `Right` will be swapped before rotating
+    is_reflection: bool,
+    /// The [`Side`] that [`Side::Left`] gets mapped to
+    left_location: Side,
+}
+
+impl EdgeTransform {
+    /// A transform which has no effect
+    fn identity() -> Self {
+        Self {
+            is_reflection: false,
+            left_location: Side::Left,
+        }
+    }
+
+    /// Returns the [`EdgeTransform`] which maps one sequence of vertices to another.  The vertex
+    /// sequences are assumed to be going clockwise from the bottom-left corner.  
+    fn from_vertex_transform(verts_from: [VertIdx; 4], verts_to: [VertIdx; 4]) -> Option<Self> {
+        // Check that the both sequences contain the same set of vertices
+        //
+        // We simply check that the set of vertices is the same (i.e. by sorting both lists and
+        // checking equality).  It's fine to use set comparisons on the `VertIdx`s; states other
+        // than rotations/reflections are impossible because they would require one of the boxes to
+        // be self-intersecting.
+        let mut sorted_verts_from = verts_from;
+        let mut sorted_verts_to = verts_to;
+        sorted_verts_from.sort();
+        sorted_verts_to.sort();
+        if sorted_verts_from != sorted_verts_to {
+            return None;
+        }
+        // Test all the rotations without reflections
+        for i in 0..4 {
+            let mut rotated_verts_from = verts_from;
+            rotated_verts_from.rotate_right(i);
+            if rotated_verts_from == verts_to {
+                return Some(EdgeTransform {
+                    is_reflection: false,
+                    left_location: Side::from_index(i),
+                });
+            }
+        }
+        // Reflect the vertices horizontally
+        let mut reflected_verts_from = verts_from;
+        reflected_verts_from.swap(0, 3); // Swap bottom-left and bottom-right
+        reflected_verts_from.swap(1, 2); // Swap top-left and top-right
+
+        // Test all the rotations with reflections
+        for i in 0..4 {
+            let mut rotated_verts_from = reflected_verts_from;
+            rotated_verts_from.rotate_right(i);
+            if rotated_verts_from == verts_to {
+                todo!("Please test that this is correct before using any reflectional symmetry");
+                /* return Some(EdgeTransform {
+                    is_reflection: true,
+                    left_location: Side::from_index(i),
+                }); */
+            }
+        }
+
+        None
+    }
+
+    /// Returns the transform generated by applying `self` followed by `other`.
+    fn sequence(self, other: Self) -> Self {
+        Self {
+            is_reflection: self.is_reflection != other.is_reflection, // Two reflections cancel out
+            left_location: other.transform(self.left_location), // Track where `Left` will end up
+        }
+    }
+
+    /// Find the [`Side`] of an edge after `self` has been applied
+    fn transform(self, mut side: Side) -> Side {
+        if self.is_reflection {
+            side = side.flip_horizontal(); // Apply the horizontal reflection
+        }
+        side.rotate(self.left_location) // Apply the rotation
+    }
+}
+
+impl Default for EdgeTransform {
+    /// Default to the identity transform
+    fn default() -> Self {
+        Self::identity()
     }
 }

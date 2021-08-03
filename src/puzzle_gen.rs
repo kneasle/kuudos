@@ -43,14 +43,11 @@ impl<'shp, 'symm, F: Solver<'shp>, S: MultipleSolnSolver<'shp>> PuzzleGen<'shp, 
         let empty_grid: Grid = vec![None; self.shape.num_cells()];
         let mut rng = thread_rng();
         let mut best_puzzle: Option<(usize, Grid, Solution)> = None;
-
         // Repeatedly fill the empty grid
         for _ in 0..self.config.num_grids {
             let filled_grid = self.grid_filler.solve(&empty_grid).ok()?;
             self.gen_puzzles_from_grid(&filled_grid, &mut rng, &mut best_puzzle);
-            println!("{:?}", filled_grid);
         }
-
         // Extract the best grid and return it if it exists
         best_puzzle.map(|(_score, grid, soln)| (grid, soln))
     }
@@ -113,7 +110,6 @@ impl<'shp, 'symm, F: Solver<'shp>, S: MultipleSolnSolver<'shp>> PuzzleGen<'shp, 
             match best_puzzle {
                 Some((best_score, best_grid, best_soln)) => {
                     if score < *best_score {
-                        println!("{:?}", score);
                         // If this better than the best grid/solution, then this becomes the best
                         // grid/solution
                         best_grid.clear();

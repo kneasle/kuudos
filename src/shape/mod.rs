@@ -377,7 +377,7 @@ pub struct Edge {
 /// same equivalence class must either be all clues or all blanks).
 #[derive(Debug, Clone)]
 pub struct Symmetry {
-    /// For each cell, this maps to an equivalence class index from `0..self.num_equiv_classes`
+    /// For each cell, this maps to an equivalence class index in the range `0..self.num_equiv_classes`
     cell_equiv_classes: Vec<usize>,
     /// How many unique equivalence classes this `Symmetry` contains
     num_equiv_classes: usize,
