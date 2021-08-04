@@ -19,7 +19,7 @@ pub struct Naive<'s> {
     shape: &'s Shape,
     config: Config,
     /// For a cell with index `i`, `affected_cells[i]` contains the set of cells which share a
-    /// house with cell `i` (**excluding** `i` itself)
+    /// group with cell `i` (**excluding** `i` itself)
     affected_cells: CellVec<Vec<CellIdx>>,
 }
 
@@ -97,9 +97,9 @@ impl<'s> Naive<'s> {
         // to remove as much of the possible search space as possible, so we pick (one of) the
         // cells with the fewest options
         let min_idx = partial
-            .num_pencil_marks
+            .pencil_masks
             .indexed_iter()
-            .min_by_key(|(_cell_idx, num_opts)| **num_opts)
+            .min_by_key(|(_cell_idx, pencil_mask)| pencil_mask.count_ones())
             .map(|(cell_idx, _)| cell_idx)
             .expect("Grid has no cells");
 
@@ -225,10 +225,6 @@ struct Partial {
     /// A bitmask for each cell, where a `1` at position `i` means that digit `i` can be placed in
     /// that cell
     pencil_masks: CellVec<usize>,
-    /// How many options are left per cell.
-    ///
-    /// Invariant: for all i: `num_options_left[i] = options_per_cell[i].count_ones()`
-    num_pencil_marks: CellVec<usize>,
 }
 
 impl Partial {
@@ -240,7 +236,6 @@ impl Partial {
             penned_cells: CellVec::repeat(None, shape.num_cells()),
             num_unpenned_cells: shape.num_cells(),
             pencil_masks: CellVec::repeat(all_options, shape.num_cells()),
-            num_pencil_marks: CellVec::repeat(shape.num_symbols, shape.num_cells()),
         }
     }
 
@@ -251,17 +246,12 @@ impl Partial {
             self.num_unpenned_cells -= 1;
         }
         self.penned_cells[cell_idx] = Some(value);
-        // Set the number of pencil marks in this cell to be as large as possible (so this cell
-        // will never get chosen for either a hidden single or as the best branch).
-        self.num_pencil_marks[cell_idx] = usize::MAX;
+        // Set all bits of the pencil mask, to prevent this cell from being pencilled again
+        self.pencil_masks[cell_idx] = usize::MAX;
         // 'Unpencil' this value from any cell which shares a house with this one
         for &affected_cell_idx in &solver.affected_cells[cell_idx] {
             let pencil_mask = &mut self.pencil_masks[affected_cell_idx];
             let bit = 1 << value;
-            // If the cell is currently pencilled, then update the corresponding count
-            if *pencil_mask & bit != 0 {
-                self.num_pencil_marks[affected_cell_idx] -= 1;
-            }
             // Set the bit corresponding to this value to 0
             *pencil_mask &= !bit;
         }
@@ -270,9 +260,9 @@ impl Partial {
     /// Is the given cell a 'naked single' (_\*sniggering intensifies\*_) - i.e. is there only one
     /// cell that can go in it?
     fn naked_single_digit(&self, cell_idx: CellIdx) -> Option<usize> {
-        let is_naked_single = self.num_pencil_marks[cell_idx] == 1;
-        if is_naked_single {
-            Some(63 - self.pencil_masks[cell_idx].leading_zeros() as usize)
+        let pencil_mask = self.pencil_masks[cell_idx];
+        if pencil_mask.count_ones() == 1 {
+            Some(63 - pencil_mask.leading_zeros() as usize)
         } else {
             None
         }
@@ -300,23 +290,11 @@ impl Partial {
     #[cfg(debug_assertions)]
     fn debug_assert_invariants(&self) {
         assert_eq!(self.pencil_masks.len(), self.penned_cells.len());
-        assert_eq!(self.pencil_masks.len(), self.num_pencil_marks.len());
 
         assert_eq!(
             self.num_unpenned_cells,
             self.penned_cells.iter().filter(|c| c.is_none()).count()
         );
-        for ((cell_idx, pencil_mask), count) in self
-            .pencil_masks
-            .indexed_iter()
-            .zip_eq(self.num_pencil_marks.iter())
-        {
-            // This invariant only applies to unpenned cells
-            if self.penned_cells[cell_idx].is_some() {
-                continue;
-            }
-            assert_eq!(*count, pencil_mask.count_ones() as usize);
-        }
     }
 
     /// Asserts that `self` upholds the required invariants, and panics otherwise (does nothing in
@@ -328,14 +306,10 @@ impl Partial {
 
 impl Display for Partial {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        for (pen, (pencil_mask, opts_left)) in self.penned_cells.iter().zip_eq(
-            self.pencil_masks
-                .iter()
-                .zip_eq(self.num_pencil_marks.iter()),
-        ) {
+        for (pen, pencil_mask) in self.penned_cells.iter().zip_eq(self.pencil_masks.iter()) {
             match pen {
-                Some(p) => writeln!(f, "{:>2}: {:0>16b} {}", p, pencil_mask, opts_left)?,
-                None => writeln!(f, "  : {:0>16b} {}", pencil_mask, opts_left)?,
+                Some(p) => writeln!(f, "{:>2}: {:0>16b}", p, pencil_mask)?,
+                None => writeln!(f, "  : {:0>16b}", pencil_mask)?,
             }
         }
         write!(f, "{} cells unpenned", self.num_unpenned_cells)
