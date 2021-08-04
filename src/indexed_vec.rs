@@ -35,6 +35,8 @@ impl<Idx, T> TypedVec<Idx, T> {
         }
     }
 
+    /// Creates a `TypedVec` made of repeating the same element to a given length.  The untyped
+    /// equivalent is `vec![elem; len]`.
     pub fn repeat(elem: T, len: usize) -> Self
     where
         T: Clone,
@@ -45,10 +47,12 @@ impl<Idx, T> TypedVec<Idx, T> {
         }
     }
 
+    /// Returns `true` if this `TypedVec` has no elements
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }
 
+    /// Returns the number of elements in this `TypedVec`
     pub fn len(&self) -> usize {
         self.inner.len()
     }
@@ -71,6 +75,7 @@ impl<Idx, T> TypedVec<Idx, T> {
         idx
     }
 
+    /// Get the element at a given index, or `None` if the index doesn't exist.
     pub fn get(&self, idx: Idx) -> Option<&T>
     where
         Idx: IdxType,
@@ -78,6 +83,8 @@ impl<Idx, T> TypedVec<Idx, T> {
         self.inner.get(idx.to_idx())
     }
 
+    /// Gets a mutable reference to the element at a given index, or `None` if the index doesn't
+    /// exist.
     pub fn get_mut(&mut self, idx: Idx) -> Option<&mut T>
     where
         Idx: IdxType,
@@ -87,14 +94,19 @@ impl<Idx, T> TypedVec<Idx, T> {
 
     /* ITER FUNCTIONS */
 
+    /// Returns an [`Iterator`] which yields references to the elements within this `TypedVec`
     pub fn iter(&self) -> std::slice::Iter<T> {
         self.inner.iter()
     }
 
+    /// Returns an [`Iterator`] which yields mutable references to the elements within this
+    /// `TypedVec`
     pub fn iter_mut(&mut self) -> std::slice::IterMut<T> {
         self.inner.iter_mut()
     }
 
+    /// Returns an [`Iterator`] which yields references to the elements within this `TypedVec`,
+    /// along with their indices.  The untyped equivalent is `.iter().enumerate()`.
     pub fn indexed_iter(&self) -> impl Iterator<Item = (Idx, &T)>
     where
         Idx: IdxType,
@@ -105,6 +117,8 @@ impl<Idx, T> TypedVec<Idx, T> {
             .map(|(i, v)| (Idx::from_idx(i), v))
     }
 
+    /// Returns an [`Iterator`] which yields mutable references to the elements within this
+    /// `TypedVec`, along with their indices.  The untyped equivalent is `.iter().enumerate()`.
     pub fn indexed_iter_mut(&mut self) -> impl Iterator<Item = (Idx, &mut T)>
     where
         Idx: IdxType,
@@ -115,6 +129,8 @@ impl<Idx, T> TypedVec<Idx, T> {
             .map(|(i, v)| (Idx::from_idx(i), v))
     }
 
+    /// Returns a new `TypedVec` where a given function has been applied to each element in `self`.
+    /// The untyped equivalent is `.iter().map(f).collect::<Vec<_>>()`.
     pub fn map<U>(&self, f: impl Fn(&T) -> U) -> TypedVec<Idx, U> {
         TypedVec {
             inner: self.inner.iter().map(f).collect_vec(),
@@ -122,7 +138,7 @@ impl<Idx, T> TypedVec<Idx, T> {
         }
     }
 
-    /// Gets the index of the first element for which `f` returns `true`
+    /// Gets the index of the first element `x` for which `f(x)` returns `true`.
     pub fn idx_of_first(&self, f: impl Fn(&T) -> bool) -> Option<Idx>
     where
         Idx: IdxType,
