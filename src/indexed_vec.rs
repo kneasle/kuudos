@@ -105,6 +105,12 @@ impl<Idx, T> TypedVec<Idx, T> {
         self.inner.iter_mut()
     }
 
+    /// Consumes this `TypedVec` and turns it into an [`Iterator`] which yields all the contained
+    /// values
+    pub fn into_iter(self) -> std::vec::IntoIter<T> {
+        self.inner.into_iter()
+    }
+
     /// Returns an [`Iterator`] which yields references to the elements within this `TypedVec`,
     /// along with their indices.  The untyped equivalent is `.iter().enumerate()`.
     pub fn indexed_iter(&self) -> impl Iterator<Item = (Idx, &T)>

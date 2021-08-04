@@ -9,11 +9,11 @@ use crate::{
 
 use super::{Error, MultipleSolnSolver, Solver, WithDifficulty};
 
-/// A pretty naive solver, using only 'naked singles' and backtracking.  Nevertheless, this naive
-/// approach is fast enough to efficiently solve most human-friendly puzzles.  It is, however,
-/// extremely bad at detecting unsolvable grids, making it unsuitable for tasks such as populating
-/// partially complete grids.  It is mainly intended as a cheap-and-cheerful test rig for other
-/// parts of the code.
+/// A pretty naive solver, using only 'naked singles' and backtracking as well as relying on
+/// runtime branches for all configuration.  Nevertheless, this naive approach is fast enough to
+/// efficiently solve most human-friendly puzzles.  It is, however, extremely bad at detecting
+/// unsolvable grids, making it unsuitable for tasks such as populating partially complete grids.
+/// It is mainly intended as a cheap-and-cheerful test rig for other parts of the code.
 #[derive(Debug, Clone)]
 pub struct Naive<'s> {
     shape: &'s Shape,
@@ -50,7 +50,12 @@ impl<'s> Naive<'s> {
 
         // Run recursive backtracking on this grid, and extract the solution or propagate the error
         self.recursive_solve(partial, check_multiple_solns, &mut num_digits_penned)
-            .map(Partial::into_solved_digits) // Extract the solution
+            // Extract the solution
+            .map(|partial| {
+                partial
+                    .into_solved_digits()
+                    .expect("Solver returned unsolved grid")
+            })
             .map(|grid| (grid, num_digits_penned as f32)) // Add the difficulty to the return value
     }
 
@@ -83,7 +88,7 @@ impl<'s> Naive<'s> {
         }
 
         // If the grid has not been solved by naked singles, then it is either solved or a branch
-        // is required
+        // in the search tree is required
 
         // If the value of `partial` passed to this function is soluble using only naked singles
         // then it permits precisely one solution, which `partial` now contains.  So we return that
@@ -103,6 +108,9 @@ impl<'s> Naive<'s> {
             .map(|(cell_idx, _)| cell_idx)
             .expect("Grid has no cells");
 
+        // Place to store one solution.  If we are checking for multiple solutions, the solver will
+        // place the first solution in here, then search for a second one.  If a second one is
+        // later found, then `solution` will be `Some(p)` and the search can be aborted.
         let mut solution: Option<Partial> = None;
         let mut unexplored_pencil_mask = partial.pencil_masks[min_idx];
         while unexplored_pencil_mask != 0 {
@@ -273,16 +281,9 @@ impl Partial {
         self.num_unpenned_cells == 0
     }
 
-    /// Returns the digits in this `Partial`, panicking if the grid isn't solved.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `self.is_solved()` is `false`
-    fn into_solved_digits(self) -> Vec<usize> {
-        self.penned_cells
-            .iter()
-            .map(|v| v.expect("`recursive_solve` returned an unsolved grid"))
-            .collect_vec()
+    /// Returns the digits in this `Partial`, returning `None` if the grid isn't solved.
+    fn into_solved_digits(self) -> Option<Vec<usize>> {
+        self.penned_cells.into_iter().collect()
     }
 
     /// Asserts that `self` upholds the required invariants, and panics otherwise (does nothing in
