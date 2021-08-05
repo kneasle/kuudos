@@ -1,4 +1,7 @@
-use std::fmt::{Display, Formatter};
+use std::{
+    fmt::{Display, Formatter},
+    iter::FusedIterator,
+};
 
 use itertools::Itertools;
 
@@ -134,8 +137,9 @@ impl Partial {
 
     /// Gets the pencil mask for a given cell - i.e. a number where the locations of `1`s show
     /// which digits are possible in this cell.
-    pub fn get_pencil_mask(&self, cell_idx: CellIdx) -> Option<usize> {
-        self.pencil_masks.get(cell_idx).copied()
+    pub fn pencilled_digit_iter(&self, cell_idx: CellIdx) -> Option<PencilledDigitIter> {
+        let pencil_mask = *self.pencil_masks.get(cell_idx)?;
+        Some(PencilledDigitIter { pencil_mask })
     }
 
     /// Asserts that `self` upholds the required invariants, and panics otherwise (does nothing in
@@ -195,3 +199,36 @@ impl Table {
         Self { affected_cells }
     }
 }
+
+/// An [`Iterator`] which yields the pencilled digits in a given cell (in increasing order)
+#[derive(Debug, Clone, Copy)]
+pub struct PencilledDigitIter {
+    /// Mask where every the index `1` is a pencilled digit which hasn't yet been returned
+    pencil_mask: usize,
+}
+
+impl Iterator for PencilledDigitIter {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.pencil_mask == 0 {
+            return None;
+        }
+        let next_digit = self.pencil_mask.trailing_zeros() as usize;
+        self.pencil_mask &= !(1 << next_digit); // Set this digit's bit to `0`
+        Some(next_digit)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let digits_left = self.len();
+        (digits_left, Some(digits_left))
+    }
+}
+
+impl ExactSizeIterator for PencilledDigitIter {
+    fn len(&self) -> usize {
+        self.pencil_mask.count_ones() as usize
+    }
+}
+
+impl FusedIterator for PencilledDigitIter {}

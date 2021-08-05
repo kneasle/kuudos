@@ -1,11 +1,18 @@
 use std::fmt::{Display, Formatter};
 
 use itertools::Itertools;
+use rand::Rng;
 
 use crate::Shape;
 
 pub mod naive;
 mod partial;
+pub mod random;
+
+/// Type alias for a partially filled sudoku grid
+pub type Grid = Vec<Option<usize>>;
+/// Type alias for a fully filled (i.e. solved) sudoku grid
+pub type Solution = Vec<usize>;
 
 /// Trait implemented by all solving algorithms
 pub trait Solver<'s> {
@@ -15,27 +22,39 @@ pub trait Solver<'s> {
     /// is essentially used to give the solvers an opportunity to build lookup tables for each
     /// [`Shape`].
     fn new(shape: &'s Shape, config: Self::Config) -> Self;
+}
 
-    /// Solve a puzzle
-    fn solve(&self, clues: &[Option<usize>]) -> Result<Vec<usize>, Error>;
+/// Trait implemented by all solvers which can check for single solutions
+pub trait SingleSolnSolver<'s>: Solver<'s> {
+    /// Find a single solution for a puzzle, without checking for the existence of other solutions.
+    fn solve_single_soln(&self, clues: &[Option<usize>]) -> Result<Solution, Error>;
 }
 
 /// Trait implemented by all solving algorithms which check for multiple solutions
 pub trait MultipleSolnSolver<'s>: Solver<'s> {
     /// Solve a puzzle, checking for multiple solutions
-    fn solve_multiple_solns(&self, clues: &[Option<usize>]) -> Result<Vec<usize>, Error>;
+    fn solve(&self, clues: &[Option<usize>]) -> Result<Solution, Error>;
 }
 
 /// Trait implemented by all solving algorithms which check for multiple solutions and difficulty
 /// of the solution
-pub trait WithDifficulty<'s>: MultipleSolnSolver<'s> {
+pub trait WithDifficulty<'s>: Solver<'s> {
     /// Solve a puzzle, checking for multiple solutions
-    fn solve_with_difficulty(&self, clues: &[Option<usize>]) -> Result<(Vec<usize>, f32), Error>;
+    fn solve_with_difficulty(&self, clues: &[Option<usize>]) -> Result<(Solution, f32), Error>;
+}
+
+/// Trait implemented by all solving algorithms which check for multiple solutions and difficulty
+/// of the solution
+pub trait RandomSolver<'s>: Solver<'s> {
+    /// Solve a puzzle for one solution, filling the cells randomly.  This is only really used for
+    /// populating puzzle grids; for solving puzzles, randomness has no benefit and only slows the
+    /// solver down.
+    fn solve_random(&self, clues: &[Option<usize>], rng: &mut impl Rng) -> Result<Solution, Error>;
 }
 
 /// Generates a clue list from a string (where `'.'` or `'0'` represent an empty cell and
 /// `"123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"` is used as a case-insensitive lookup for grid labels)
-pub fn clues_from_str(s: &str) -> Vec<Option<usize>> {
+pub fn clues_from_str(s: &str) -> Grid {
     s.chars()
         .filter_map(|c| match c {
             '.' | '0' => Some(None),

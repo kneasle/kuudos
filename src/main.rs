@@ -7,7 +7,8 @@ use kuudos::{
     solve::{
         clues_from_str,
         naive::{self, Naive},
-        Solver,
+        random::NaiveRandom,
+        SingleSolnSolver, Solver,
     },
     Shape,
 };
@@ -21,7 +22,7 @@ fn main() {
         std::fs::write("bdr.svg", builder.as_svg(40.0)).unwrap();
 
         let (s, symm) = builder.build().unwrap();
-        let (clues, soln) = PuzzleGen::<Naive, Naive>::new(
+        let (clues, soln) = PuzzleGen::<NaiveRandom, Naive>::new(
             &s,
             &symm,
             naive::Config::default(),
@@ -45,7 +46,7 @@ fn main() {
              ...6.3.7. 5..2..... 1.4......",
         );
         let soln = Naive::new(&s, naive::Config::default())
-            .solve(&clues)
+            .solve_single_soln(&clues)
             .unwrap();
         (s, clues, soln)
     };

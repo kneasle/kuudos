@@ -4,16 +4,13 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::{
     indexed_vec::{CellIdx, IdxType},
-    solve::{MultipleSolnSolver, Solver},
+    solve::{Grid, MultipleSolnSolver, RandomSolver, Solution},
     Shape, Symmetry,
 };
 
-type Grid = Vec<Option<usize>>;
-type Solution = Vec<usize>;
-
 /// A generator for random sudoku puzzles.
 #[derive(Debug, Clone)]
-pub struct PuzzleGen<'shp, 'symm, F: Solver<'shp>, S: MultipleSolnSolver<'shp>> {
+pub struct PuzzleGen<'shp, 'symm, F: RandomSolver<'shp>, S: MultipleSolnSolver<'shp>> {
     shape: &'shp Shape,
     symmetry: &'symm Symmetry,
     config: Config,
@@ -21,7 +18,7 @@ pub struct PuzzleGen<'shp, 'symm, F: Solver<'shp>, S: MultipleSolnSolver<'shp>> 
     puzzle_solver: S,
 }
 
-impl<'shp, 'symm, F: Solver<'shp>, S: MultipleSolnSolver<'shp>> PuzzleGen<'shp, 'symm, F, S> {
+impl<'shp, 'symm, F: RandomSolver<'shp>, S: MultipleSolnSolver<'shp>> PuzzleGen<'shp, 'symm, F, S> {
     /// Creates a new puzzle generator for a given [`Shape`]
     pub fn new(
         shape: &'shp Shape,
@@ -55,7 +52,7 @@ impl<'shp, 'symm, F: Solver<'shp>, S: MultipleSolnSolver<'shp>> PuzzleGen<'shp, 
         let mut best_puzzle: Option<(usize, Grid, Solution)> = None;
         // Repeatedly fill the empty grid
         for _ in 0..self.config.num_grids {
-            let filled_grid = self.grid_filler.solve(&empty_grid).ok()?;
+            let filled_grid = self.grid_filler.solve_random(&empty_grid, rng).ok()?;
             self.gen_puzzles_from_grid(&filled_grid, rng, &mut best_puzzle);
         }
         // Extract the best grid and return it if it exists
@@ -115,7 +112,7 @@ impl<'shp, 'symm, F: Solver<'shp>, S: MultipleSolnSolver<'shp>> PuzzleGen<'shp, 
         }
         // Test whether or not the grid is soluble
         *num_solver_runs += 1;
-        if self.puzzle_solver.solve_multiple_solns(clues).is_ok() {
+        if self.puzzle_solver.solve(clues).is_ok() {
             // Update the `best_puzzle` if this is better
             let score = clues.iter().filter(|v| v.is_some()).count();
             match best_puzzle {
