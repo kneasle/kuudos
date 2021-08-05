@@ -1,13 +1,9 @@
-use std::fmt::{Display, Formatter};
+use crate::Shape;
 
-use itertools::Itertools;
-
-use crate::{
-    indexed_vec::{CellIdx, CellVec, IdxType},
-    Shape,
+use super::{
+    partial::{Partial, Table},
+    Error, MultipleSolnSolver, Solver, WithDifficulty,
 };
-
-use super::{Error, MultipleSolnSolver, Solver, WithDifficulty};
 
 /// A pretty naive solver, using only 'naked singles' and backtracking as well as relying on
 /// runtime branches for all configuration.  Nevertheless, this naive approach is fast enough to
@@ -18,9 +14,7 @@ use super::{Error, MultipleSolnSolver, Solver, WithDifficulty};
 pub struct Naive<'s> {
     shape: &'s Shape,
     config: Config,
-    /// For a cell with index `i`, `affected_cells[i]` contains the set of cells which share a
-    /// group with cell `i` (**excluding** `i` itself)
-    affected_cells: CellVec<Vec<CellIdx>>,
+    table: Table,
 }
 
 impl<'s> Naive<'s> {
@@ -40,14 +34,7 @@ impl<'s> Naive<'s> {
                                        // difficulty
 
         // Create a partial solution where only the given clues are penned
-        let mut partial = Partial::empty(self.shape);
-        clues
-            .iter()
-            .enumerate()
-            .map(|(idx, v)| (CellIdx::from_idx(idx), v))
-            .filter_map(|(i, maybe_v)| maybe_v.map(|v| (i, v)))
-            .for_each(|(cell_idx, value)| partial.pen(self, cell_idx, value));
-
+        let partial = Partial::from_clues(&self.table, self.shape, clues)?;
         // Run recursive backtracking on this grid, and extract the solution or propagate the error
         self.recursive_solve(partial, check_multiple_solns, &mut num_digits_penned)
             // Extract the solution
@@ -68,24 +55,8 @@ impl<'s> Naive<'s> {
         // Repeatedly pen in 'naked singles' - i.e. a cell with only one possible digit.  These are
         // cheap to compute and don't require backtracking, so we perform them in-place on the
         // current Partial.
-        loop {
-            let mut has_naked_singles = false;
-            for (cell_idx, _cell) in self.affected_cells.indexed_iter() {
-                // If this cell is a naked single then we pen its value
-                if let Some(only_digit) = partial.naked_single_digit(cell_idx) {
-                    has_naked_singles = true;
-                    partial.pen(self, cell_idx, only_digit);
-                    *num_digits_penned += 1;
-                    // Whenever we pen a cell, check that the invariants are still upheld (but only
-                    // in debug mode)
-                    partial.debug_assert_invariants();
-                }
-            }
-            // Exit the loop when no more naked singles are possible
-            if !has_naked_singles {
-                break;
-            }
-        }
+        let num_naked_singles_solved = partial.solve_naked_singles(&self.table);
+        *num_digits_penned += num_naked_singles_solved;
 
         // If the grid has not been solved by naked singles, then it is either solved or a branch
         // in the search tree is required
@@ -101,18 +72,13 @@ impl<'s> Naive<'s> {
         // cell and speculatively try each value to see which solutions are found.  We always want
         // to remove as much of the possible search space as possible, so we pick (one of) the
         // cells with the fewest options
-        let min_idx = partial
-            .pencil_masks
-            .indexed_iter()
-            .min_by_key(|(_cell_idx, pencil_mask)| pencil_mask.count_ones())
-            .map(|(cell_idx, _)| cell_idx)
-            .expect("Grid has no cells");
+        let cell_to_guess = partial.least_pencilled_cell();
 
         // Place to store one solution.  If we are checking for multiple solutions, the solver will
         // place the first solution in here, then search for a second one.  If a second one is
         // later found, then `solution` will be `Some(p)` and the search can be aborted.
         let mut solution: Option<Partial> = None;
-        let mut unexplored_pencil_mask = partial.pencil_masks[min_idx];
+        let mut unexplored_pencil_mask = partial.get_pencil_mask(cell_to_guess).unwrap();
         while unexplored_pencil_mask != 0 {
             // Repeatedly pick the highest pencil mark in the cell, and remove its flag bit
             let assumed_digit = 63 - unexplored_pencil_mask.leading_zeros() as usize;
@@ -126,7 +92,7 @@ impl<'s> Naive<'s> {
             }
             // Create a new `Partial` which assumes that this digit is taken
             let mut new_partial = partial.clone();
-            new_partial.pen(self, min_idx, assumed_digit);
+            new_partial.pen(&self.table, cell_to_guess, assumed_digit);
             match self.recursive_solve(new_partial, check_multiple_solns, num_digits_penned) {
                 Ok(new_solution) => {
                     if check_multiple_solns {
@@ -166,22 +132,10 @@ impl<'s> Solver<'s> for Naive<'s> {
     type Config = Config;
 
     fn new(shape: &'s Shape, config: Config) -> Self {
-        let mut affected_cells: CellVec<Vec<CellIdx>> =
-            CellVec::repeat(Vec::new(), shape.num_cells());
-        for group in &shape.groups {
-            for &cell_idx in &group.cells {
-                affected_cells[cell_idx].extend(group.cells.iter().filter(|idx| **idx != cell_idx));
-            }
-        }
-        // Deduplicate the lists of affected cells
-        for cells in affected_cells.iter_mut() {
-            cells.sort_unstable();
-            cells.dedup();
-        }
         Self {
             shape,
             config,
-            affected_cells,
+            table: Table::from_shape(shape),
         }
     }
 
@@ -217,102 +171,5 @@ impl Default for Config {
         Self {
             max_iterations: 10_000_000, // 10M iterations sounds like enough
         }
-    }
-}
-
-/// The state of a `Partial`ly solved sudoku grid
-#[derive(Debug, Clone)]
-struct Partial {
-    /// Which cells have 'penned' values
-    penned_cells: CellVec<Option<usize>>,
-    /// How many cells are 'unpenned'.  A `Partial` is solved if this is zero.
-    ///
-    /// Invariant: `num_unpenned_cells = penned_cells.iter().filter(|c| c.is_none()).count()`
-    num_unpenned_cells: usize,
-
-    /// A bitmask for each cell, where a `1` at position `i` means that digit `i` can be placed in
-    /// that cell
-    pencil_masks: CellVec<usize>,
-}
-
-impl Partial {
-    /// A `Partial` representing a completely empty grid
-    fn empty(shape: &Shape) -> Partial {
-        // `all_options` has `shape.num_symbols` 1s in its lowest bits, and 0s elsewhere
-        let all_options = (1 << shape.num_symbols) - 1;
-        Self {
-            penned_cells: CellVec::repeat(None, shape.num_cells()),
-            num_unpenned_cells: shape.num_cells(),
-            pencil_masks: CellVec::repeat(all_options, shape.num_cells()),
-        }
-    }
-
-    /// Pen a value in a given cell
-    fn pen(&mut self, solver: &Naive, cell_idx: CellIdx, value: usize) {
-        // Record the penned value in the current cell
-        if self.penned_cells[cell_idx].is_none() {
-            self.num_unpenned_cells -= 1;
-        }
-        self.penned_cells[cell_idx] = Some(value);
-        // Set all bits of the pencil mask, to prevent this cell from being pencilled again
-        self.pencil_masks[cell_idx] = usize::MAX;
-        // 'Unpencil' this value from any cell which shares a house with this one
-        for &affected_cell_idx in &solver.affected_cells[cell_idx] {
-            let pencil_mask = &mut self.pencil_masks[affected_cell_idx];
-            let bit = 1 << value;
-            // Set the bit corresponding to this value to 0
-            *pencil_mask &= !bit;
-        }
-    }
-
-    /// Is the given cell a 'naked single' (_\*sniggering intensifies\*_) - i.e. is there only one
-    /// cell that can go in it?
-    fn naked_single_digit(&self, cell_idx: CellIdx) -> Option<usize> {
-        let pencil_mask = self.pencil_masks[cell_idx];
-        if pencil_mask.count_ones() == 1 {
-            Some(63 - pencil_mask.leading_zeros() as usize)
-        } else {
-            None
-        }
-    }
-
-    /// Is this grid solved?
-    fn is_solved(&self) -> bool {
-        self.num_unpenned_cells == 0
-    }
-
-    /// Returns the digits in this `Partial`, returning `None` if the grid isn't solved.
-    fn into_solved_digits(self) -> Option<Vec<usize>> {
-        self.penned_cells.into_iter().collect()
-    }
-
-    /// Asserts that `self` upholds the required invariants, and panics otherwise (does nothing in
-    /// release mode)
-    #[cfg(debug_assertions)]
-    fn debug_assert_invariants(&self) {
-        assert_eq!(self.pencil_masks.len(), self.penned_cells.len());
-
-        assert_eq!(
-            self.num_unpenned_cells,
-            self.penned_cells.iter().filter(|c| c.is_none()).count()
-        );
-    }
-
-    /// Asserts that `self` upholds the required invariants, and panics otherwise (does nothing in
-    /// release mode)
-    #[cfg(not(debug_assertions))]
-    #[inline(always)]
-    fn debug_assert_invariants(&self) {}
-}
-
-impl Display for Partial {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        for (pen, pencil_mask) in self.penned_cells.iter().zip_eq(self.pencil_masks.iter()) {
-            match pen {
-                Some(p) => writeln!(f, "{:>2}: {:0>16b}", p, pencil_mask)?,
-                None => writeln!(f, "  : {:0>16b}", pencil_mask)?,
-            }
-        }
-        write!(f, "{} cells unpenned", self.num_unpenned_cells)
     }
 }

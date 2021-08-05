@@ -5,6 +5,7 @@ use itertools::Itertools;
 use crate::Shape;
 
 pub mod naive;
+mod partial;
 
 /// Trait implemented by all solving algorithms
 pub trait Solver<'s> {
