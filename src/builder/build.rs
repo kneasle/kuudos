@@ -588,32 +588,28 @@ fn traverse_path_forward(
         // hasn't been traversed/removed before)
         assert!(untraversed_edges.remove(cur_edge));
 
-        // Step across the item currently connected to an edge
-        let (new_edge, new_edge_approach_side) = match cur_connection {
+        // Step across the current `EdgeConnection`
+        let (new_edge_idx, new_edge_approach_side) = match cur_connection {
             // If we're looking at a box, then add it to the path and traverse
             EdgeConnection::Box_(cur_box_idx, cur_box_side) => {
                 // Add the box to the path
                 box_path.push((cur_box_idx, cur_box_side));
-                // Step to the opposite side of the current box
+                // Step to the opposite side of the box
                 let exit_side = cur_box_side.opposite();
-                let (new_edge_idx, new_edge_approach_side) =
-                    box_edge_map[&(cur_box_idx, exit_side)];
-                // Step to the opposite side of the new edge
-                let new_edge = &edges[new_edge_idx];
-                (new_edge, new_edge_approach_side)
+                box_edge_map[&(cur_box_idx, exit_side)]
             }
             // Edge links don't form part of the path, so just traverse them
             EdgeConnection::Link(link_idx, link_side) => {
-                // Step to the opposite side of the current box
+                // Step to the opposite side of the link
                 let exit_side = !link_side;
-                let (new_edge_idx, new_edge_approach_side) = link_edge_map[&(link_idx, exit_side)];
-                // Step to the opposite side of the new edge
-                let new_edge = &edges[new_edge_idx];
-                (new_edge, new_edge_approach_side)
+                link_edge_map[&(link_idx, exit_side)]
             }
         };
 
+        // Step across the newly approached edge
+        let new_edge = &edges[new_edge_idx];
         let new_edge_exit_side = new_edge_approach_side.opposite();
+
         // Determine what connection we've stepped into
         let new_connection = match new_edge_exit_side {
             // Edges always have a box on their right side
@@ -629,7 +625,7 @@ fn traverse_path_forward(
                         // would be traversed again (but going in the opposite direction).
                         assert!(untraversed_edges.remove(new_edge));
                         // We now know that this path is non-cyclic, so check that the starting
-                        // edge only bordered one side (otherwise the path is invalid)
+                        // edge only bordered one side (otherwise we only explored part of the path)
                         assert!(start_edge.connection_left.is_none());
                         // If the edge doesn't have a left side then we've finished the path, so
                         // should break the loop
@@ -750,8 +746,8 @@ struct Edge {
     vert_idx_top: VertIdx,
     vert_idx_bottom: VertIdx,
 
-    connection_left: Option<EdgeConnection>,
-    connection_right: EdgeConnection,
+    connection_left: Option<EdgeConnection>, // External edges have nothing on their left side
+    connection_right: EdgeConnection,        // Every edge always has something on its right side
 
     /// The number of cells that go down this `Edge`
     length: usize,
