@@ -263,3 +263,49 @@ pub fn rot_sym_classic() -> Result<Builder, BoxAddError> {
     let _top_box = bdr.extrude_edge(right_box, Side::Top)?;
     Ok(bdr)
 }
+
+pub fn triangle() -> Result<Builder, BoxAddError> {
+    /* We create the following pattern:
+     *  +---+
+     *  |   |-\
+     *  +---+---+
+     *  |   |   |-\
+     *  +---+---+---+
+     *  |   |   |   |
+     *  +---+---+---+
+     */
+    let mut bdr = Builder::new(3, 3, 1);
+    // Create the bottom left box
+    let bot_left_box = bdr.add_box_square_by_corner(V2::ZERO, 1.0, Deg(0.0));
+    // Extrude upwards twice
+    let top_box_1 = bdr.extrude_edge(bot_left_box, Side::Top)?;
+    let top_box_2 = bdr.extrude_edge(top_box_1, Side::Top)?;
+    // Extrude rightwards twice
+    let right_box_1 = bdr.extrude_edge(bot_left_box, Side::Right)?;
+    let right_box_2 = bdr.extrude_edge(right_box_1, Side::Right)?;
+    // Create a top-right box
+    let top_right_box = bdr.extrude_edge(right_box_1, Side::Top)?;
+
+    // Add the edge links
+    bdr.link_edges(
+        top_box_2,
+        Side::Right,
+        top_right_box,
+        Side::Top,
+        EdgeLinkStyle::Arc,
+    )
+    .unwrap();
+    bdr.link_edges(
+        top_right_box,
+        Side::Right,
+        right_box_2,
+        Side::Top,
+        EdgeLinkStyle::Arc,
+    )
+    .unwrap();
+
+    // Rotate the puzzle
+    bdr.rotate(Deg(135.0));
+
+    Ok(bdr)
+}
