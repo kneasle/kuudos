@@ -8,6 +8,7 @@ use crate::indexed_vec::{CellIdx, CellVec, IdxType, VertIdx, VertVec};
 use crate::utils::Rect2;
 use crate::{builder::Builder, utils, V2Ext, V2};
 
+pub mod examples;
 pub(crate) mod svg;
 
 // Re-export `RenderingOpts`
