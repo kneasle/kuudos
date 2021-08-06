@@ -5,8 +5,9 @@ use std::collections::{HashMap, HashSet};
 use itertools::Itertools;
 
 use crate::{
+    img::{Elem, StrokeStyle, Style},
     indexed_vec::{BoxIdx, CellIdx, CellVec, EdgeIdx, EdgeVec, IdxType, LinkIdx, VertIdx, VertVec},
-    shape::{DrawElement, Group, LinkShape},
+    shape::Group,
     Shape, Symmetry, V2,
 };
 
@@ -392,7 +393,7 @@ fn generate_extra_elements(
     bdr: &Builder,
     link_edge_map: &LinkEdgeMap,
     edges: &EdgeVec<Edge>,
-) -> Vec<DrawElement> {
+) -> Vec<Elem> {
     let mut extra_elems = Vec::new();
 
     // Closure which returns the extra links required to draw a single `EdgeLink`
@@ -423,14 +424,23 @@ fn generate_extra_elements(
             let bottom_pos = V2::lerp(vert_pos_bl, vert_pos_br, lerp_factor);
             // Generate the shape of this element
             let shape = match link.style {
-                EdgeLinkStyle::Arc => {
-                    LinkShape::arc_passing_through(top_pos, top_normal, bottom_pos)
-                        .unwrap_or(LinkShape::Line(top_pos, bottom_pos))
+                EdgeLinkStyle::Arc => Elem::arc_passing_through(
+                    top_pos,
+                    top_normal,
+                    bottom_pos,
+                    Style::JustStroke(StrokeStyle::BoxBorder),
+                )
+                .unwrap_or(Elem::LineSegment(
+                    top_pos,
+                    bottom_pos,
+                    StrokeStyle::BoxBorder,
+                )),
+                EdgeLinkStyle::Linear => {
+                    Elem::LineSegment(top_pos, bottom_pos, StrokeStyle::BoxBorder)
                 }
-                EdgeLinkStyle::Linear => LinkShape::Line(top_pos, bottom_pos),
                 EdgeLinkStyle::Hidden => continue, // Don't add hidden links
             };
-            extra_elems.push(DrawElement::EdgeLink(shape));
+            extra_elems.push(shape);
         }
     }
 

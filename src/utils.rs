@@ -4,7 +4,7 @@ use std::{cmp::Ordering, f32::consts::PI};
 
 use crate::V2;
 
-use angle::{Angle, Rad};
+use angle::{Angle, Deg, Rad};
 use num_complex::Complex32;
 
 /// Compute the average of a set of vectors
@@ -43,24 +43,6 @@ pub fn angle_between(v1: V2, v2: V2) -> Rad<f32> {
     }
 
     Rad(angle_diff)
-}
-
-/// Computes the centre and radius of the circle which passes through `p1` with tangent `tang_1`,
-/// and also passes through `p2`.  Returns `None` if `p2` lies on the tangent.
-pub fn circle_passing_through(p1: V2, tang_1: V2, p2: V2) -> Option<(V2, f32, Rad<f32>, Rad<f32>)> {
-    // Given two points on a circle, the centre must lie on the locus of points equidistant from
-    // each point.  Given that we have a tangent and therefore its normal, the centre of the circle
-    // will be the intersection between these lines.
-    let eq_line_direction = (p2 - p1).normal(); // The normal of p1 -> p2
-    let eq_line_pt = V2::lerp(p1, p2, 0.5); // The midpoint of (p1, p2)
-    let normal_to_tangent = tang_1.normal();
-    // Compute the centre and radius
-    let centre = intersect_lines(p1, normal_to_tangent, eq_line_pt, eq_line_direction)?;
-    let radius = (p1 - centre).length();
-    // Compute the angles `p1` and `p2`
-    let start_angle = Rad((p1 - centre).angle());
-    let end_angle = Rad((p2 - centre).angle());
-    Some((centre, radius, start_angle, end_angle))
 }
 
 /// Computes the centre and the maximum and minimum radii (in that order) of an ellipse which
@@ -185,22 +167,6 @@ pub fn intersect_lines(p1: V2, d1: V2, p2: V2, d2: V2) -> Option<V2> {
         let part_in_brackets = V2::new(e, -d) * c + V2::new(-b, a) * f;
         Some(part_in_brackets / determinant)
     }
-}
-
-/// Generate the SVG path string for a circular arc
-pub fn svg_circle_arc_path_str(
-    centre: V2,
-    radius: f32,
-    start_angle: impl Angle<f32> + Copy,
-    end_angle: impl Angle<f32> + Copy,
-) -> String {
-    let right_radius = V2::RIGHT * radius;
-    let start_pt = centre + right_radius.rotate(start_angle);
-    let end_pt = centre + right_radius.rotate(end_angle);
-    format!(
-        "M {} {} A {} {} 0 0 1 {} {}",
-        start_pt.x, start_pt.y, radius, radius, end_pt.x, end_pt.y
-    )
 }
 
 /// Returns the radius of the largest circle which fits within a regular polygon with a given side
@@ -351,12 +317,103 @@ impl Rect2 {
         Some(combined_union)
     }
 
+    /// Creates a `Rect2` that contains two `Option<Rect2>`.  This returns `None` if and only if
+    /// both `rect_1` and `rect_2` are `None`.
+    pub fn union_option(opt_rect_1: Option<Rect2>, opt_rect_2: Option<Rect2>) -> Option<Self> {
+        let union_rect = match (opt_rect_1, opt_rect_2) {
+            (Some(r1), Some(r2)) => r1.union(r2),
+            (None, Some(rect)) => rect,
+            (Some(rect), None) => rect,
+            (None, None) => return None,
+        };
+        Some(union_rect)
+    }
+
     /// Expands `self` to so that it contains some point
     pub fn expand_to_include(&mut self, pt: V2) {
         self.min = min_v2(self.min, pt);
         self.max = max_v2(self.max, pt);
     }
 }
+
+/// A section of the circumference of a circle
+#[derive(Debug, Clone, Copy)]
+pub struct CircularArc {
+    pub centre: V2,
+    pub radius: f32,
+    pub start_angle: Rad<f32>,
+    pub end_angle: Rad<f32>,
+}
+
+impl CircularArc {
+    /// Computes the `CircularArc` which passes through `p1` with tangent `tang_1`, and also passes
+    /// through `p2`.  Returns `None` if `p2` lies on the tangent.
+    pub fn arc_passing_through(p1: V2, tang_1: V2, p2: V2) -> Option<Self> {
+        // Given two points on a circle, the centre must lie on the locus of points equidistant from
+        // each point.  Given that we have a tangent and therefore its normal, the centre of the circle
+        // will be the intersection between these lines.
+        let eq_line_direction = (p2 - p1).normal(); // The normal of p1 -> p2
+        let eq_line_pt = V2::lerp(p1, p2, 0.5); // The midpoint of (p1, p2)
+        let normal_to_tangent = tang_1.normal();
+        // Compute the centre and radius
+        let centre = intersect_lines(p1, normal_to_tangent, eq_line_pt, eq_line_direction)?;
+        let radius = (p1 - centre).length();
+        // Compute the angles `p1` and `p2`
+        let start_angle = Rad((p1 - centre).angle());
+        let end_angle = Rad((p2 - centre).angle());
+        Some(Self {
+            centre,
+            radius,
+            start_angle,
+            end_angle,
+        })
+    }
+
+    /// Gets a translated and scaled copy of this `CircularArc`
+    pub fn transform(self, translation: V2, scale: f32) -> Self {
+        Self {
+            centre: (self.centre + translation) * scale,
+            radius: self.radius * scale,
+            ..self // Translation & scaling doesn't change the angles
+        }
+    }
+
+    /// Returns the smallest [`Rect2`] which contains every point in this `CircularArc`.
+    pub fn bbox(self) -> Rect2 {
+        let point_at = |angle: Rad<f32>| self.centre + V2::RIGHT.rotate(angle) * self.radius;
+        // Compute bbox of the start/end points
+        let mut bbox = Rect2::bbox([point_at(self.start_angle), point_at(self.end_angle)]).unwrap();
+        // Expand the bbox to cover all of the boundary points (i.e. min/max x/y points
+        // on the circle) which are covered by the arc range
+        let angles = [Deg(0.0f32), Deg(90.0), Deg(180.0), Deg(270.0)];
+        let angle_covered_by_arc = (self.end_angle - self.start_angle).to_deg().wrap();
+        for a in angles {
+            let angle_from_start = (a - self.start_angle.to_deg()).wrap(); // This is from 0..360
+            if angle_from_start < angle_covered_by_arc {
+                // If this boundary point is within the arc, then expand the boundary
+                // to include it
+                bbox.expand_to_include(point_at(a.to_rad()));
+            }
+        }
+        // Return the expanded bbox
+        bbox
+    }
+
+    /// Generate the SVG path string for a circular arc
+    pub fn svg_path_str(self) -> String {
+        let right_radius = V2::RIGHT * self.radius;
+        let start_pt = self.centre + right_radius.rotate(self.start_angle);
+        let end_pt = self.centre + right_radius.rotate(self.end_angle);
+        format!(
+            "M {} {} A {} {} 0 0 1 {} {}",
+            start_pt.x, start_pt.y, self.radius, self.radius, end_pt.x, end_pt.y
+        )
+    }
+}
+
+//////////////////////////////
+// MIN/MAX UTILS FOR FLOATS //
+//////////////////////////////
 
 /// Component-wise min of two vectors
 pub fn min_v2(a: V2, b: V2) -> V2 {

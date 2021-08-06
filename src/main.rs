@@ -1,14 +1,14 @@
 use itertools::Itertools;
 use kuudos::{
+    img::RenderingOpts,
     puzzle_gen::{self, PuzzleGen},
-    shape::{examples, RenderingOpts},
+    shape::{examples, Shape},
     solve::{
         clues_from_str,
         naive::{self, Naive},
         random::NaiveRandom,
         SingleSolnSolver, Solver,
     },
-    Shape,
 };
 
 const VALUE_NAMES: &str = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
@@ -16,7 +16,7 @@ const VALUE_NAMES: &str = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqr
 fn main() {
     let (shape, clues, soln) = if true {
         // let s = Shape::star2x2(5, PI);
-        let builder = examples::rot_sym_classic().unwrap();
+        let builder = examples::triangle().unwrap();
         std::fs::write("bdr.svg", builder.as_svg(40.0)).unwrap();
 
         let (s, symm) = builder.build().unwrap();

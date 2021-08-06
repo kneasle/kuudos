@@ -1,18 +1,17 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 
-use angle::{Angle, Deg, Rad};
+use angle::Angle;
 use itertools::Itertools;
 
+use crate::img::{Elem, Image, RenderingOpts};
 use crate::indexed_vec::{CellIdx, CellVec, IdxType, VertIdx, VertVec};
-use crate::utils::Rect2;
-use crate::{builder::Builder, utils, V2Ext, V2};
+use crate::utils::{CircularArc, Rect2};
+use crate::{builder::Builder, V2Ext, V2};
 
 pub mod examples;
-pub(crate) mod svg;
-
-// Re-export `RenderingOpts`
-pub use svg::RenderingOpts;
+// pub(crate) mod svg;
+pub(crate) mod to_img;
 
 /// The shape of a sudoku as accepted by Kuudos
 #[derive(Debug, Clone)]
@@ -32,7 +31,7 @@ pub struct Shape {
     pub(crate) cells: CellVec<Vec<VertIdx>>,
     /// Extra elements drawn before the cells.  These can be used for things like rendering extra
     /// links between boxes.
-    pub(crate) extra_elements: Vec<DrawElement>,
+    pub(crate) extra_elements: Vec<Elem>,
 }
 
 impl Shape {
@@ -47,14 +46,12 @@ impl Shape {
     }
 
     /// Generate an SVG string of a puzzle which has this `Shape`
-    pub fn svg_string(
-        &self,
-        opts: &RenderingOpts,
-        scaling: f32,
-        assignment: &[Option<char>],
-    ) -> String {
-        // Delegate to the `svg` module
-        svg::gen_svg_string(self, opts, scaling, assignment)
+    pub fn svg_string(&self, opts: &RenderingOpts, scale: f32, clues: &[Option<char>]) -> String {
+        self.image(clues).svg_string(scale, opts)
+    }
+
+    pub fn image(&self, clues: &[Option<char>]) -> Image {
+        to_img::gen_img(self, clues)
     }
 
     /// Returns the number of groups which are shared between two cells
@@ -117,17 +114,11 @@ impl Shape {
     }
 
     /// Returns the bounding box of this `Shape` as a (min, max) pair of vectors
-    pub(crate) fn bbox(&self) -> Option<Rect2> {
+    pub fn bbox(&self) -> Option<Rect2> {
         let bbox_from_verts = Rect2::bbox(self.verts.iter().copied());
-        let bbox_from_links = Rect2::union_iter(self.extra_elements.iter().map(DrawElement::bbox));
-        // Combine the bboxes
-        let combined_bbox = match (bbox_from_verts, bbox_from_links) {
-            (Some(r1), Some(r2)) => r1.union(r2),
-            (None, Some(rect)) => rect,
-            (Some(rect), None) => rect,
-            (None, None) => return None,
-        };
-        Some(combined_bbox)
+        let bbox_from_extra_elems = Rect2::union_iter(self.extra_elements.iter().map(Elem::bbox));
+        // Take the union of the `Option<Rect2>`s
+        Rect2::union_option(bbox_from_verts, bbox_from_extra_elems)
     }
 }
 
@@ -144,8 +135,8 @@ impl Shape {
         assert_ne!(box_width, 0, "`box_width` can't be 0");
         assert_ne!(box_height, 0, "`box_height` can't be 0");
 
-        /* We number the cells as they would be read in a book; so a 4x4 grid would be numbered
-         * (numbers are written in hex for convenience):
+        /* We number the cells as they would be read in a book; so a 4x4 grid would be numbered as
+         * follows (numbers are written in hex for convenience):
          *
          * +------+------+
          * | 0  1 | 2  3 |
@@ -157,8 +148,8 @@ impl Shape {
          * | c  d | e  f |
          * +------+------+
          *
-         * Vertices are also labelled that way
-         */
+         * Vertices are also labelled using this system.  However, there is a `box_width + 1` by
+         * `box_height + 1` grid of vertices, so the resulting indices are different. */
         let grid_width = box_height * box_width;
         let cell_idx = |row: usize, col: usize| CellIdx::from_idx((row * grid_width) + col);
 
@@ -271,57 +262,11 @@ impl Group {
     }
 }
 
-#[derive(Debug, Clone)]
-pub(crate) enum DrawElement {
-    EdgeLink(LinkShape),
-}
-
-impl DrawElement {
-    /// Returns the smallest [`Rect2`] which contains this element
-    pub(crate) fn bbox(&self) -> Rect2 {
-        match self {
-            DrawElement::EdgeLink(shape) => match *shape {
-                LinkShape::Line(p1, p2) => Rect2::bbox([p1, p2]).unwrap(),
-                LinkShape::CircularArc {
-                    centre,
-                    radius,
-                    start_angle,
-                    end_angle,
-                } => {
-                    let point_at = |angle: Rad<f32>| centre + V2::RIGHT.rotate(angle) * radius;
-                    // Compute bbox of the start/end points
-                    let mut bbox =
-                        Rect2::bbox([point_at(start_angle), point_at(end_angle)]).unwrap();
-                    // Expand the bbox to cover all of the boundary points (i.e. min/max x/y points
-                    // on the circle) which are covered by the arc range
-                    let angles = [Deg(0.0f32), Deg(90.0), Deg(180.0), Deg(270.0)];
-                    let angle_covered_by_arc = (end_angle - start_angle).to_deg().wrap();
-                    for a in angles {
-                        let angle_from_start = (a - start_angle.to_deg()).wrap();
-                        if angle_from_start < angle_covered_by_arc {
-                            // If this boundary point is within the arc, then expand the boundary
-                            // to include it
-                            bbox.expand_to_include(point_at(a.to_rad()));
-                        }
-                    }
-                    // Return the expanded bbox
-                    bbox
-                }
-            },
-        }
-    }
-}
-
 /// Some simple shapes that can be rendered to SVG
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum LinkShape {
     /// Draw a circular arc (angles are taken clockwise from the +X axis)
-    CircularArc {
-        centre: V2,
-        radius: f32,
-        start_angle: Rad<f32>,
-        end_angle: Rad<f32>,
-    },
+    CircularArc(CircularArc),
     /// Draw a straight line segment between two points.  If the last element is `true`, then
     /// this is assumed to be a fallback for another style and this line will be shown red to
     /// highlight the error.
@@ -333,34 +278,7 @@ impl LinkShape {
     /// of them.  If such an arc cannot exist (for example, if both points lie on the tangent) then
     /// `None` is returned
     pub(crate) fn arc_passing_through(p1: V2, tangent_1: V2, p2: V2) -> Option<LinkShape> {
-        utils::circle_passing_through(p1, tangent_1, p2).map(
-            |(centre, radius, start_angle, end_angle)| LinkShape::CircularArc {
-                centre,
-                radius,
-                start_angle,
-                end_angle,
-            },
-        )
-    }
-
-    /// Translate and scale this `ElemShape`
-    pub(crate) fn transform(self, translation: V2, scaling: f32) -> Self {
-        match self {
-            LinkShape::CircularArc {
-                centre,
-                radius,
-                start_angle,
-                end_angle,
-            } => LinkShape::CircularArc {
-                centre: (centre + translation) * scaling,
-                radius: radius * scaling,
-                start_angle,
-                end_angle,
-            },
-            LinkShape::Line(p1, p2) => {
-                LinkShape::Line((p1 + translation) * scaling, (p2 + translation) * scaling)
-            }
-        }
+        CircularArc::arc_passing_through(p1, tangent_1, p2).map(LinkShape::CircularArc)
     }
 }
 

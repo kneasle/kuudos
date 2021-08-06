@@ -2,7 +2,7 @@
 
 use crate::{
     shape::LinkShape,
-    utils::{self, Rect2},
+    utils::{CircularArc, Rect2},
     V2Ext, V2,
 };
 
@@ -140,17 +140,23 @@ pub fn gen_svg(bdr: &Builder, scaling: f32) -> String {
             EdgeLinkLineType::Error => "red",
         };
         match element {
-            LinkShape::CircularArc {
+            LinkShape::CircularArc(CircularArc {
                 centre,
                 radius,
                 start_angle,
                 end_angle,
-            } => {
+            }) => {
                 // Draw a circular arc between the points
                 let mut line_elem = XMLElement::new("path");
                 line_elem.add_attribute(
                     "d",
-                    &utils::svg_circle_arc_path_str(centre, radius, start_angle, end_angle),
+                    &CircularArc {
+                        centre,
+                        radius,
+                        start_angle,
+                        end_angle,
+                    }
+                    .svg_path_str(),
                 );
                 line_elem.add_attribute("fill", "none");
                 line_elem.add_attribute("stroke", stroke_color);

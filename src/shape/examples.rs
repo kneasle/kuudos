@@ -304,7 +304,7 @@ pub fn triangle() -> Result<Builder, BoxAddError> {
     )
     .unwrap();
 
-    // Rotate the puzzle
+    // Rotate the puzzle so that the symmetry goes left/right
     bdr.rotate(Deg(135.0));
 
     Ok(bdr)

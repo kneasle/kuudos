@@ -1,6 +1,7 @@
 use vector2d::Vector2D;
 
 pub mod builder;
+pub mod img;
 mod indexed_vec;
 pub mod puzzle_gen;
 pub mod shape;
