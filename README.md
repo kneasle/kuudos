@@ -13,8 +13,8 @@ if you will).  Everyone knows about our venerable friend, the classic 9x9 sudoku
 
 But most sudoku enthusiasts will know that this isn't the only possible sudoku shape.  We can also
 create 4x4 and 6x6 sudokus (i.e. the boxes are 2x2 and 2x3 respectively).  However, these smaller
-puzzles are generally easy to the point of being boring (there just aren't enough degrees of
-freedom).  So easy, in fact, that I don't feel bad about not providing solutions :wink::
+puzzles are generally easy to the point of being boring.  So easy, in fact, that I don't feel bad
+about not providing solutions :wink::
 
 \<insert 4x4 and 6x6 sudoku\>
 
@@ -25,8 +25,8 @@ actually very spicy (perhaps something like a [Pasanda](https://en.wikipedia.org
 
 Here's the thing: there's nothing about the definition of a sudoku that _requires_ it to be square.
 Obviously, square sudokus are easy to print and visualise, but squareness is an arbitrary limitation
-imposed by humans.  But computers have no such qualms.  And since this project is about programming
-computers, let's say goodbye to arbitrary restrictions and see what comes out!
+imposed by humans.  Computers, on the other hand, have no such qualms.  And since this project is
+about programming computers, let's say goodbye to arbitrary restrictions and see what comes out!
 
 At the end of the day, a sudoku is simply a set of cells.  These cells are split into _groups_
 (usually rows, columns or boxes) where digits can't be placed into two different cells which share a
@@ -54,19 +54,28 @@ and interesting shapes are also possible, such as the 'tear-drop':
 
 \<insert teardrop\>
 
-Whether or not these shapes are _easy_ to solve is debatable, but they are at least semi-intuitive
-for humans.  I think that these are something equivalent to
+Whether or not these shapes are _easy_ to solve is debatable (the star definitely is), but they are
+at least semi-intuitive for humans.  I think that these are something equivalent to
 [Tikka](https://en.wikipedia.org/wiki/Tikka_\(food\)) - a bit of a tingle for the little grey cells
 but really nothing too spicy.
 
-As a fun aside, it turns out that both of these shapes are incredibly over-defined.  What I mean by
-this is that there are very few ways to actually fill the cells with digits, without violating one
-of the group constraints.  This basically means that they are extremely easy for computers to solve,
-but painfully difficult for us poor humans.  Also, the puzzle generator in Kuudos tries to make
-interesting puzzles by taking away as many clues as possible whilst still having exactly one
-solution.  I think you can see where this is going - the solver would merrily take out loads and
-loads of clues (everything's fine, there's still one solution) and the result is nearly impossible
-for any relatively inexperienced sudoku player like me.
+As a fun aside, it turns out that both of these shapes are incredibly over-defined - i.e.  there are
+very few ways to actually fill the cells with digits without violating one of the group constraints.
+
+All the solvers in Kuudos are essentially searching all the possible ways of filling the puzzle grid
+(and faster solvers are only faster because they are better at skipping parts of the search space).
+Therefore, if there aren't very many solved grids then it's entirely possible for the solver to
+simply test them all.  And if there's one thing computers are good at it's bashing out this kind of
+thing at super-speed.  Humans, on the other hand, are terrible at this solving method.
+
+And why would we be?  There's no fun in blindly guessing solutions to a logic puzzle.
+
+Couple this with the (relatively) small number of solutions, means that over-constrained are
+extremely easy for computers to solve, but painfully difficult for us poor humans.  To make things
+even more fun, the puzzle generator in Kuudos tries to make interesting puzzles by taking away as
+many clues as possible whilst still having exactly one solution.  I think you can see where this is
+going - the solver would merrily take out loads and loads of clues (it thinks: everything's fine,
+there's still one solution) but the result is nearly impossible for humans to solve.
 
 ### Splitting boxes
 
