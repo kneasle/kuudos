@@ -166,8 +166,8 @@ impl Default for RenderingOpts {
             text_vertical_nudge: 0.33, // multiples of `font_size`
             clue_font_size: 0.7,       // edge lengths
             clue_color: RGB8::new(0, 0, 0),
-            pen_font_size: 0.7, // edge lengths
-            pen_color: RGB8::new(0, 200, 0),
+            pen_font_size: 0.7,              // edge lengths
+            pen_color: RGB8::new(0, 0, 200), // Pen is dark blue
 
             disconnected_edge_color: RGB8::new(255, 0, 0),
 
