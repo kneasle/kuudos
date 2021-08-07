@@ -8,11 +8,11 @@ use crate::{
 use angle::{Angle, Deg};
 use itertools::Itertools;
 
-mod build;
 mod to_image;
+mod to_shape;
 
 /// Re-export [`BuildError`] to the rest of the code.  This is then re-re-exported in `lib.rs`
-pub use build::BuildError;
+pub use to_shape::BuildError;
 
 /// A struct for programmatically building complex `Shapes`
 #[derive(Debug, Clone)]
@@ -346,7 +346,7 @@ impl Builder {
 
     /// Converts this `Builder` into a [`Shape`] and the associated [`Symmetry`]
     pub fn build(self) -> Result<(Shape, Symmetry), BuildError> {
-        build::build(self)
+        to_shape::gen_shape(self)
     }
 
     /* Internal helpers */
@@ -468,80 +468,17 @@ impl Builder {
     }
 }
 
-/// Helper function that takes 4 vertices, and classifies the box that joins those vertices (in the
-/// order specified)
-fn classify_box(verts: [V2; 4]) -> Result<RotateDirection, BoxAddError> {
-    /// The different states of the corner of a box
-    #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-    enum CornerType {
-        /// The 3 vertices round this corner turn clockwise
-        Clockwise,
-        /// The 3 vertices lie on a straight line (and therefore don't turn either direction)
-        Linear,
-        /// The 3 vertices round this corner turn anti-clockwise
-        AntiClockwise,
-    }
-
-    impl CornerType {
-        fn classify(a: impl Angle<f32>) -> CornerType {
-            let angle = a.to_deg().0;
-            if angle.abs() < 0.001 || angle.abs() > 360.0 - 0.001 {
-                // If the angle is close to 0 or 180 degrees, we call the corner 'linear'
-                CornerType::Linear
-            } else if angle > 0.0 {
-                // If the corner increases the angle, then it turns clockwise
-                CornerType::Clockwise
-            } else {
-                // If the corner decreases the angle, then it turns anti-clockwise
-                CornerType::AntiClockwise
-            }
-        }
-    }
-
-    // Iterate over the positions of all consecutive triple of vertices (i.e. pairs of edges
-    // which join at a vertex), and classify that vertex according to its direction
-    let directions = verts
-        .iter()
-        .circular_tuple_windows()
-        .map(|(v1, v2, v3)| {
-            // The edges go v1 -> v2 and v2 -> v3
-            let d1 = v2 - v1;
-            let d2 = v3 - v2;
-            // Classify the middle corner (v2) according to its angle
-            CornerType::classify(utils::angle_between(d1, d2))
-        })
-        .collect_vec();
-
-    // Count how many of corners have each classification
-    let num_anticlockwise = directions
-        .iter()
-        .filter(|c| **c == CornerType::AntiClockwise)
-        .count();
-    let num_linear = directions
-        .iter()
-        .filter(|c| **c == CornerType::Linear)
-        .count();
-    let num_clockwise = directions
-        .iter()
-        .filter(|c| **c == CornerType::Clockwise)
-        .count();
-
-    match (num_anticlockwise, num_linear, num_clockwise) {
-        // If all corners go anticlockwise, then this box is strictly convex but
-        // anticlockwise
-        (4, 0, 0) => Ok(RotateDirection::AntiClockwise),
-        // If all corners go clockwise, then this box doesn't need modification
-        (0, 0, 4) => Ok(RotateDirection::Clockwise),
-
-        // If two corners go each way, then the box must self-intersect
-        (2, 0, 2) => Err(BoxAddError::SelfIntersecting),
-        // If there are no linear corners, then the only remaining case is that the box
-        // isn't strictly convex
-        (_, 0, _) => Err(BoxAddError::NonConvex),
-        // If there are any linear corners, then we class the whole box as linear. Any case where
-        // `num_linear == 0` would be caught by the non-convex case (or higher cases)
-        (_, _, _) => Err(BoxAddError::LinearCorner),
-    }
+/// The possible ways that generating a box can fail
+#[derive(Debug, Clone, Copy)]
+pub enum BoxAddError {
+    /// The newly created box would intersect with itself
+    SelfIntersecting,
+    /// The newly created box has two adjacent edges forming a straight line
+    LinearCorner,
+    /// The newly created box is not strictly convex
+    NonConvex,
+    /// A [`BoxIdx`] was given that doesn't correspond to an exiting box
+    InvalidBoxIdx(BoxIdx),
 }
 
 //////////////////////////
@@ -711,22 +648,85 @@ struct SymmetryPosition {
     rotation_within_equiv_class: usize,
 }
 
-/// The possible ways that generating a box can fail
-#[derive(Debug, Clone, Copy)]
-pub enum BoxAddError {
-    /// The newly created box would intersect with itself
-    SelfIntersecting,
-    /// The newly created box has two adjacent edges forming a straight line
-    LinearCorner,
-    /// The newly created box is not strictly convex
-    NonConvex,
-    /// A [`BoxIdx`] was given that doesn't correspond to an exiting box
-    InvalidBoxIdx(BoxIdx),
-}
+////////////////////////////////////
+// UTILITY FUNCTIONS & DATA TYPES //
+////////////////////////////////////
 
-////////////////////////
-// UTILITY DATA TYPES //
-////////////////////////
+/// Helper function that takes 4 vertices, and classifies the box that joins those vertices (in the
+/// order specified)
+fn classify_box(verts: [V2; 4]) -> Result<RotateDirection, BoxAddError> {
+    /// The different states of the corner of a box
+    #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+    enum CornerType {
+        /// The 3 vertices round this corner turn clockwise
+        Clockwise,
+        /// The 3 vertices lie on a straight line (and therefore don't turn either direction)
+        Linear,
+        /// The 3 vertices round this corner turn anti-clockwise
+        AntiClockwise,
+    }
+
+    impl CornerType {
+        fn classify(a: impl Angle<f32>) -> CornerType {
+            let angle = a.to_deg().0;
+            if angle.abs() < 0.001 || angle.abs() > 360.0 - 0.001 {
+                // If the angle is close to 0 or 180 degrees, we call the corner 'linear'
+                CornerType::Linear
+            } else if angle > 0.0 {
+                // If the corner increases the angle, then it turns clockwise
+                CornerType::Clockwise
+            } else {
+                // If the corner decreases the angle, then it turns anti-clockwise
+                CornerType::AntiClockwise
+            }
+        }
+    }
+
+    // Iterate over the positions of all consecutive triple of vertices (i.e. pairs of edges
+    // which join at a vertex), and classify that vertex according to its direction
+    let directions = verts
+        .iter()
+        .circular_tuple_windows()
+        .map(|(v1, v2, v3)| {
+            // The edges go v1 -> v2 and v2 -> v3
+            let d1 = v2 - v1;
+            let d2 = v3 - v2;
+            // Classify the middle corner (v2) according to its angle
+            CornerType::classify(utils::angle_between(d1, d2))
+        })
+        .collect_vec();
+
+    // Count how many of corners have each classification
+    let num_anticlockwise = directions
+        .iter()
+        .filter(|c| **c == CornerType::AntiClockwise)
+        .count();
+    let num_linear = directions
+        .iter()
+        .filter(|c| **c == CornerType::Linear)
+        .count();
+    let num_clockwise = directions
+        .iter()
+        .filter(|c| **c == CornerType::Clockwise)
+        .count();
+
+    match (num_anticlockwise, num_linear, num_clockwise) {
+        // If all corners go anticlockwise, then this box is strictly convex but
+        // anticlockwise
+        (4, 0, 0) => Ok(RotateDirection::AntiClockwise),
+        // If all corners go clockwise, then this box doesn't need modification
+        (0, 0, 4) => Ok(RotateDirection::Clockwise),
+
+        // If two corners go each way, then the box must self-intersect
+        (2, 0, 2) => Err(BoxAddError::SelfIntersecting),
+        // If there are no linear corners, then the only remaining case is that the box
+        // isn't strictly convex
+        (_, 0, _) => Err(BoxAddError::NonConvex),
+        // If there are any linear corners, then we class the whole box as linear. Any case where
+        // `num_linear == 0` would be caught by the non-convex case (or higher cases)
+        (_, _, _) => Err(BoxAddError::LinearCorner),
+    }
+}
 
 /// The possible directions an edge can face
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]

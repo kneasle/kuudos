@@ -14,7 +14,7 @@ use crate::{
 use super::{Builder, Direction, EdgeLinkStyle, LinkSide, RotateDirection, Side};
 
 /// Converts a `Builder` into a [`Shape`] and the associated [`Symmetry`]
-pub fn build(mut bdr: Builder) -> Result<(Shape, Symmetry), BuildError> {
+pub fn gen_shape(mut bdr: Builder) -> Result<(Shape, Symmetry), BuildError> {
     // Before we start building the `Shape`, we normalise each box so that the vertices are
     // always specified in clockwise order.
     normalise_box_direction(&mut bdr);
