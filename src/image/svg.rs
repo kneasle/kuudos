@@ -32,7 +32,7 @@ pub fn gen_svg_from_lowered(lowered_image: &LoweredImage, margin: f32, scale: f3
     let image_dimensions = (bbox.max() - bbox.min() + margin_vec * 2.0) * scale;
     root.add_attribute("width", &image_dimensions.x.to_string());
     root.add_attribute("height", &image_dimensions.y.to_string());
-
+    // Translate all `Elem`s to SVG's `XMLElement`s
     for e in lowered_image.elements() {
         root.add_child(gen_svg_elem(e, translation, scale));
     }
@@ -147,7 +147,8 @@ fn add_stroke_style_attrs(
         Some(s) => {
             xml_elem.add_attribute("stroke", &s.stroke_color.to_string());
             xml_elem.add_attribute("stroke-width", &(s.line_width * scale).to_string());
-            xml_elem.add_attribute("stroke-linecap", "round"); // Always use round line caps for now
+            xml_elem.add_attribute("stroke-linecap", "round"); // Always round off the line ends
+            xml_elem.add_attribute("stroke-linejoin", "round"); // Always round off internal corners
         }
         None => xml_elem.add_attribute("stroke", "none"), // Put `stroke="none"` if no stroke
     }
