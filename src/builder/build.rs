@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use itertools::Itertools;
 
 use crate::{
-    img::{Elem, StrokeStyle, Style},
+    image::{Elem, StrokeStyle, Style},
     indexed_vec::{BoxIdx, CellIdx, CellVec, EdgeIdx, EdgeVec, IdxType, LinkIdx, VertIdx, VertVec},
     shape::Group,
     Shape, Symmetry, V2,

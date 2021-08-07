@@ -4,13 +4,13 @@ use std::hash::Hash;
 use angle::Angle;
 use itertools::Itertools;
 
-use crate::img::{Elem, Image, RenderingOpts};
+use crate::image::{Elem, Image, RenderingOpts};
 use crate::indexed_vec::{CellIdx, CellVec, IdxType, VertIdx, VertVec};
 use crate::utils::Rect2;
 use crate::{builder::Builder, V2Ext, V2};
 
 pub mod examples;
-mod to_img;
+mod to_image;
 
 /// The shape of a sudoku as accepted by Kuudos
 #[derive(Debug, Clone)]
@@ -50,7 +50,7 @@ impl Shape {
     }
 
     pub fn image(&self, clues: &[Option<char>]) -> Image {
-        to_img::gen_img(self, clues)
+        to_image::gen_image(self, clues)
     }
 
     /// Returns the number of groups which are shared between two cells

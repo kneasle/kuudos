@@ -1,6 +1,6 @@
 use itertools::Itertools;
 use kuudos::{
-    img::RenderingOpts,
+    image::RenderingOpts,
     puzzle_gen::{self, PuzzleGen},
     shape::{examples, Shape},
     solve::{

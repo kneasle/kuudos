@@ -1,7 +1,7 @@
 //! Code for converting a `Builder` into a debug-able SVG string
 
 use crate::{
-    img::{
+    image::{
         ConcreteFillStyle, ConcreteStrokeStyle, ConcreteTextStyle, LoweredElem, LoweredImage,
         LoweredStyle, TextAnchor,
     },

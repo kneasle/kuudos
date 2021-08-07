@@ -3,12 +3,12 @@ use itertools::Itertools;
 
 use super::Shape;
 use crate::{
-    img::{Elem, FillStyle, Image, StrokeStyle, Style, TextStyle},
+    image::{Elem, FillStyle, Image, StrokeStyle, Style, TextStyle},
     utils,
 };
 
 /// Write a populated sudoku grid to an SVG string
-pub fn gen_img(shape: &Shape, clues: &[Option<char>]) -> Image {
+pub fn gen_image(shape: &Shape, clues: &[Option<char>]) -> Image {
     // Create image
     let mut image = Image::empty();
 
@@ -65,7 +65,7 @@ pub fn gen_img(shape: &Shape, clues: &[Option<char>]) -> Image {
         StrokeStyle::Disconnected => 0,
         StrokeStyle::CellBorder => 1,
         StrokeStyle::BoxBorder => 2,
-        &StrokeStyle::Custom(_) => unreachable!("`Shape::gen_img` won't generate custom styles"),
+        &StrokeStyle::Custom(_) => unreachable!("`Shape::gen_image` won't generate custom styles"),
     });
 
     // Add the edges

@@ -4,7 +4,7 @@ use angle::Angle;
 use itertools::Itertools;
 use simple_xml_builder::XMLElement;
 
-use crate::{img::TextAnchor, utils::Rect2, V2Ext, V2};
+use crate::{image::TextAnchor, utils::Rect2, V2Ext, V2};
 
 use super::{
     lowering::lower, ConcreteFillStyle, ConcreteStrokeStyle, ConcreteTextStyle, Image, LoweredElem,
@@ -29,9 +29,9 @@ pub fn gen_svg_from_lowered(lowered_image: &LoweredImage, margin: f32, scale: f3
 
     // Generate the root SVG element
     let mut root = XMLElement::new("svg");
-    let img_dimensions = (bbox.max() - bbox.min() + margin_vec * 2.0) * scale;
-    root.add_attribute("width", &img_dimensions.x.to_string());
-    root.add_attribute("height", &img_dimensions.y.to_string());
+    let image_dimensions = (bbox.max() - bbox.min() + margin_vec * 2.0) * scale;
+    root.add_attribute("width", &image_dimensions.x.to_string());
+    root.add_attribute("height", &image_dimensions.y.to_string());
 
     for e in lowered_image.elements() {
         root.add_child(gen_svg_elem(e, translation, scale));
