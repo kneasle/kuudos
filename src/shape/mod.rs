@@ -50,7 +50,7 @@ impl Shape {
     }
 
     pub fn image(&self, clues: &[Option<char>]) -> Image {
-        to_image::gen_image(self, clues)
+        to_image::gen_image_with_clues(self, clues)
     }
 
     /// Returns the number of groups which are shared between two cells

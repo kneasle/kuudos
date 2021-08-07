@@ -4,11 +4,19 @@ use itertools::Itertools;
 use super::Shape;
 use crate::{
     image::{Elem, FillStyle, Image, StrokeStyle, Style, TextStyle},
-    utils,
+    indexed_vec::{CellIdx, IdxType},
+    utils, V2,
 };
 
 /// Write a populated sudoku grid to an SVG string
-pub fn gen_image(shape: &Shape, clues: &[Option<char>]) -> Image {
+pub fn gen_image_with_clues(shape: &Shape, clues: &[Option<char>]) -> Image {
+    gen_image(shape, single_digit_per_cell(TextStyle::Clue, clues))
+}
+
+pub fn gen_image(
+    shape: &Shape,
+    mut get_cell_contents: impl FnMut(CellIdx, &[V2]) -> Vec<Elem>,
+) -> Image {
     // Create image
     let mut image = Image::empty();
 
@@ -24,17 +32,9 @@ pub fn gen_image(shape: &Shape, clues: &[Option<char>]) -> Image {
     }
 
     // Add the cell contents
-    for (vert_idxs, value) in shape.cells.iter().zip_eq(clues) {
-        if let Some(c) = *value {
-            let verts = vert_idxs.iter().map(|idx| shape.verts[*idx]);
-            let cell_centre = utils::centroid(verts).expect("Can't have cell with no versions");
-            image.add(Elem::Text {
-                position: cell_centre,
-                text: c.to_string(),
-                angle: Rad(0.0),
-                style: TextStyle::Clue,
-            });
-        }
+    for (cell_idx, vert_idxs) in shape.cells.indexed_iter() {
+        let verts = vert_idxs.iter().map(|idx| shape.verts[*idx]).collect_vec();
+        image.add_iter(get_cell_contents(cell_idx, &verts));
     }
 
     // Sort the edges so that all the box borders come after all the cell borders (to prevent
@@ -76,4 +76,28 @@ pub fn gen_image(shape: &Shape, clues: &[Option<char>]) -> Image {
         image.add(Elem::LineSegment(vert_bottom, vert_top, style));
     }
     image
+}
+
+///////////////////////////////////////////
+// HELPER FUNCTIONS FOR POPULATING CELLS //
+///////////////////////////////////////////
+
+/// Returns a closure that generates a places a single 'penned' digit in the middle of each cell.
+pub fn single_digit_per_cell<'a>(
+    text_style: TextStyle,
+    digits: &'a [Option<char>],
+) -> impl FnMut(CellIdx, &[V2]) -> Vec<Elem> + 'a {
+    move |idx, verts| {
+        let cell_centre =
+            utils::centroid(verts.iter().copied()).expect("Can't have cell with no versions");
+        match digits[idx.to_idx()] {
+            Some(c) => vec![Elem::Text {
+                position: cell_centre,
+                text: c.to_string(),
+                angle: Rad(0.0),
+                style: text_style.clone(),
+            }],
+            None => vec![],
+        }
+    }
 }

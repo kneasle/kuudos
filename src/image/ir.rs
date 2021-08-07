@@ -28,6 +28,12 @@ impl<F, S, T> Image<F, S, T> {
         self.elements.push(elem)
     }
 
+    /// Adds every [`Elem`] from an [`Iterator`] to this `Image`.  This preserves the order - the
+    /// last [`Elem`] yielded will end up at the front.
+    pub fn add_iter(&mut self, elem_iter: impl IntoIterator<Item = Elem<F, S, T>>) {
+        self.elements.extend(elem_iter)
+    }
+
     /// Compute the smallest [`Rect2`] which fits around every [`Elem`] in this `Image`.  This
     /// returns `None` if the `Image` contains no [`Elem`]s.
     pub fn bbox(&self) -> Option<Rect2> {
