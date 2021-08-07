@@ -9,7 +9,7 @@ use angle::{Angle, Deg};
 use itertools::Itertools;
 
 mod build;
-mod svg;
+mod to_img;
 
 /// Re-export [`BuildError`] to the rest of the code.  This is then re-re-exported in `lib.rs`
 pub use build::BuildError;
@@ -340,8 +340,8 @@ impl Builder {
     /* Conversions */
 
     /// Generates a debug-able SVG string representing the current state of `self`
-    pub fn as_svg(&self, scaling: f32) -> String {
-        svg::gen_svg(self, scaling)
+    pub fn as_svg(&self, margin: f32, scaling: f32) -> String {
+        to_img::gen_image(self).svg_string(margin, scaling)
     }
 
     /// Converts this `Builder` into a [`Shape`] and the associated [`Symmetry`]

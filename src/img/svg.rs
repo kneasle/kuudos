@@ -14,7 +14,7 @@ use super::{
 /// Generate an SVG root element for an unlowered [`Image`]
 pub fn gen_svg(image: &Image, scale: f32, opts: &RenderingOpts) -> XMLElement {
     // Lower image then delegate to `gen_svg_from_lowered`
-    gen_svg_from_lowered(&lower(image, opts), opts.padding, scale)
+    gen_svg_from_lowered(&lower(image, opts), opts.margin, scale)
 }
 
 /// Generate an SVG root element for a lowered [`Image`] (i.e. one where all styles are stated

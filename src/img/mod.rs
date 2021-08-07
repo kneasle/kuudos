@@ -16,14 +16,14 @@ pub use lowering::RenderingOpts;
 /// Re-export of [`ir::Image`] with the type params needed by the rest of the code
 pub type Image = ir::Image<FillStyle, StrokeStyle, TextStyle>;
 /// Version of [`ir::Image`] where all the styles are fully specified
-type LoweredImage = ir::Image<ConcreteFillStyle, ConcreteStrokeStyle, ConcreteTextStyle>;
+pub type LoweredImage = ir::Image<ConcreteFillStyle, ConcreteStrokeStyle, ConcreteTextStyle>;
 
 /// Re-export of [`ir::Elem`] with the type params needed by the rest of the code
 pub type Elem = ir::Elem<FillStyle, StrokeStyle, TextStyle>;
 /// Version of [`ir::Elem`] where all the styles are fully specified
-type LoweredElem = ir::Elem<ConcreteFillStyle, ConcreteStrokeStyle, ConcreteTextStyle>;
+pub type LoweredElem = ir::Elem<ConcreteFillStyle, ConcreteStrokeStyle, ConcreteTextStyle>;
 
 /// Re-export of [`ir::Style`] with the type params needed by the rest of the code
 pub type Style = ir::Style<FillStyle, StrokeStyle>;
 /// Version of [`ir::Style`] where all the styles are fully specified
-type LoweredStyle = ir::Style<ConcreteFillStyle, ConcreteStrokeStyle>;
+pub type LoweredStyle = ir::Style<ConcreteFillStyle, ConcreteStrokeStyle>;

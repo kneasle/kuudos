@@ -17,7 +17,7 @@ fn main() {
     let (shape, clues, soln) = if true {
         // let s = Shape::star2x2(5, PI);
         let builder = examples::triangle().unwrap();
-        std::fs::write("bdr.svg", builder.as_svg(40.0)).unwrap();
+        std::fs::write("bdr.svg", builder.as_svg(0.5, 40.0)).unwrap();
 
         let (s, symm) = builder.build().unwrap();
         let (clues, soln) = PuzzleGen::<NaiveRandom, Naive>::new(

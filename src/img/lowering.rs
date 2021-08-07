@@ -103,13 +103,12 @@ fn lower_text_style(style: &TextStyle, opts: &RenderingOpts) -> ConcreteTextStyl
         TextStyle::PennedDigit => (opts.pen_color, opts.pen_font_size),
         TextStyle::Custom(concrete_style) => return concrete_style.to_owned(), // No lowering needed
     };
-    let text_style = ConcreteTextStyle {
+    ConcreteTextStyle {
         font_size,
         font_family: opts.font_family.to_owned(),
         anchor: TextAnchor::Middle,
         fill_style: ConcreteFillStyle { fill_color },
-    };
-    text_style
+    }
 }
 
 /// Configuration for how a sudoku should be rendered
@@ -149,17 +148,7 @@ pub struct RenderingOpts {
 
     /// If the edge lengths are ~1 unit, how many units of space will be reserved round the edge of
     /// the SVG file
-    pub(super) padding: f32,
-}
-
-impl RenderingOpts {
-    pub fn font_size(&self) -> f32 {
-        self.clue_font_size
-    }
-
-    pub fn text_vertical_nudge(&self) -> f32 {
-        self.text_vertical_nudge
-    }
+    pub(super) margin: f32,
 }
 
 impl Default for RenderingOpts {
@@ -182,7 +171,7 @@ impl Default for RenderingOpts {
 
             disconnected_edge_color: RGB8::new(255, 0, 0),
 
-            padding: 0.5, // edge lengths
+            margin: 0.5, // edge lengths
         }
     }
 }

@@ -50,6 +50,13 @@ impl Image<FillStyle, StrokeStyle, TextStyle> {
     }
 }
 
+/// Helper methods for easy conversions to various formats
+impl super::LoweredImage {
+    pub fn svg_string(&self, margin: f32, scale: f32) -> String {
+        svg::gen_svg_from_lowered(self, margin, scale).to_string()
+    }
+}
+
 /// The shape of an [`Elem`]
 #[derive(Debug, Clone)]
 pub enum Elem<F, S, T> {

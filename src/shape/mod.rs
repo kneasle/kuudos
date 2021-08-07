@@ -6,12 +6,11 @@ use itertools::Itertools;
 
 use crate::img::{Elem, Image, RenderingOpts};
 use crate::indexed_vec::{CellIdx, CellVec, IdxType, VertIdx, VertVec};
-use crate::utils::{CircularArc, Rect2};
+use crate::utils::Rect2;
 use crate::{builder::Builder, V2Ext, V2};
 
 pub mod examples;
-// pub(crate) mod svg;
-pub(crate) mod to_img;
+mod to_img;
 
 /// The shape of a sudoku as accepted by Kuudos
 #[derive(Debug, Clone)]
@@ -259,26 +258,6 @@ impl Group {
             is_box: false,
             cells,
         }
-    }
-}
-
-/// Some simple shapes that can be rendered to SVG
-#[derive(Debug, Clone, Copy)]
-pub(crate) enum LinkShape {
-    /// Draw a circular arc (angles are taken clockwise from the +X axis)
-    CircularArc(CircularArc),
-    /// Draw a straight line segment between two points.  If the last element is `true`, then
-    /// this is assumed to be a fallback for another style and this line will be shown red to
-    /// highlight the error.
-    Line(V2, V2),
-}
-
-impl LinkShape {
-    /// Generates the [`DrawElement`] passing through a pair of points, given a tangent through one
-    /// of them.  If such an arc cannot exist (for example, if both points lie on the tangent) then
-    /// `None` is returned
-    pub(crate) fn arc_passing_through(p1: V2, tangent_1: V2, p2: V2) -> Option<LinkShape> {
-        CircularArc::arc_passing_through(p1, tangent_1, p2).map(LinkShape::CircularArc)
     }
 }
 
