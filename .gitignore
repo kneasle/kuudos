@@ -1,4 +1,5 @@
 /target
+/out
 
 # All .svg files are assumed to be testing outputs, and therefore shouldn't be checked into git
 **.svg
