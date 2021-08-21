@@ -18,9 +18,7 @@ fn main() {
     let (shape, clues, soln) = if true {
         // let s = Shape::star2x2(5, PI);
         let (s, symm) = if true {
-            let builder = examples::star(5).unwrap();
-            std::fs::write("bdr.svg", builder.as_svg(0.5, 40.0)).unwrap();
-            builder.build().unwrap()
+            examples::star(5)
         } else {
             let shape = Shape::square(3, 2);
             let symm = Symmetry::asymmetric(&shape);
