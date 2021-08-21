@@ -309,3 +309,9 @@ pub fn triangle() -> Result<Builder, BoxAddError> {
 
     Ok(bdr)
 }
+
+pub fn star(num_points: usize) -> Result<Builder, BoxAddError> {
+    let mut bdr = Builder::new(2, 2, num_points);
+    bdr.add_box_parallelogram(V2::ZERO, V2::DOWN, bdr.rotate_point_by_steps(V2::DOWN, 1))?;
+    Ok(bdr)
+}

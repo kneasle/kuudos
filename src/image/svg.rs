@@ -32,6 +32,7 @@ pub fn gen_svg_from_lowered(lowered_image: &LoweredImage, margin: f32, scale: f3
     let image_dimensions = (bbox.max() - bbox.min() + margin_vec * 2.0) * scale;
     root.add_attribute("width", &image_dimensions.x.to_string());
     root.add_attribute("height", &image_dimensions.y.to_string());
+    root.add_attribute("xmlns", "http://www.w3.org/2000/svg");
     // Translate all `Elem`s to SVG's `XMLElement`s
     for e in lowered_image.elements() {
         root.add_child(gen_svg_elem(e, translation, scale));
