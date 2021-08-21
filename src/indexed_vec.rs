@@ -4,6 +4,7 @@
 
 use std::{
     fmt::{Debug, Formatter},
+    iter::FromIterator,
     marker::PhantomData,
     ops::{Index, IndexMut},
 };
@@ -151,6 +152,24 @@ impl<Idx, T> TypedVec<Idx, T> {
     {
         let pos = self.iter().position(f);
         pos.map(Idx::from_idx)
+    }
+}
+
+impl<IdxT: IdxType, T> From<Vec<T>> for TypedVec<IdxT, T> {
+    fn from(contents: Vec<T>) -> Self {
+        Self {
+            inner: contents,
+            _phantom_data: PhantomData,
+        }
+    }
+}
+
+impl<IdxT: IdxType, T> FromIterator<T> for TypedVec<IdxT, T> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        Self {
+            inner: iter.into_iter().collect_vec(),
+            _phantom_data: PhantomData,
+        }
     }
 }
 
