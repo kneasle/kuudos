@@ -2,3 +2,5 @@
 
 # All .svg files are assumed to be testing outputs, and therefore shouldn't be checked into git
 **.svg
+# ... except those in the `media/` folder
+!media/**.svg

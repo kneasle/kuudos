@@ -1,0 +1,63 @@
+<?xml version = "1.0" encoding = "UTF-8"?>
+<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+	<polygon points="20,20 60,20 60,60 20,60" fill="rgb(255,255,255)" stroke="none" />
+	<polygon points="60,20 100,20 100,60 60,60" fill="rgb(255,255,255)" stroke="none" />
+	<polygon points="100,20 140,20 140,60 100,60" fill="rgb(255,255,255)" stroke="none" />
+	<polygon points="140,20 180,20 180,60 140,60" fill="rgb(255,255,255)" stroke="none" />
+	<polygon points="20,60 60,60 60,100 20,100" fill="rgb(255,255,255)" stroke="none" />
+	<polygon points="60,60 100,60 100,100 60,100" fill="rgb(255,255,255)" stroke="none" />
+	<polygon points="100,60 140,60 140,100 100,100" fill="rgb(255,255,255)" stroke="none" />
+	<polygon points="140,60 180,60 180,100 140,100" fill="rgb(255,255,255)" stroke="none" />
+	<polygon points="20,100 60,100 60,140 20,140" fill="rgb(255,255,255)" stroke="none" />
+	<polygon points="60,100 100,100 100,140 60,140" fill="rgb(255,255,255)" stroke="none" />
+	<polygon points="100,100 140,100 140,140 100,140" fill="rgb(255,255,255)" stroke="none" />
+	<polygon points="140,100 180,100 180,140 140,140" fill="rgb(255,255,255)" stroke="none" />
+	<polygon points="20,140 60,140 60,180 20,180" fill="rgb(255,255,255)" stroke="none" />
+	<polygon points="60,140 100,140 100,180 60,180" fill="rgb(255,255,255)" stroke="none" />
+	<polygon points="100,140 140,140 140,180 100,180" fill="rgb(255,255,255)" stroke="none" />
+	<polygon points="140,140 180,140 180,180 140,180" fill="rgb(255,255,255)" stroke="none" />
+	<text transform="translate(120,49.239998) rotate(0)" font-size="28" font-family="monospace" text-anchor="middle" fill="rgb(0,0,0)" stroke="none">2</text>
+	<text transform="translate(80,89.24) rotate(0)" font-size="28" font-family="monospace" text-anchor="middle" fill="rgb(0,0,0)" stroke="none">4</text>
+	<text transform="translate(160,89.24) rotate(0)" font-size="28" font-family="monospace" text-anchor="middle" fill="rgb(0,0,0)" stroke="none">1</text>
+	<text transform="translate(40,129.23999) rotate(0)" font-size="28" font-family="monospace" text-anchor="middle" fill="rgb(0,0,0)" stroke="none">3</text>
+	<line x1="60" y1="100" x2="60" y2="140" fill="none" stroke="rgb(200,200,200)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="180" y1="60" x2="140" y2="60" fill="none" stroke="rgb(200,200,200)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="60" y1="60" x2="20" y2="60" fill="none" stroke="rgb(200,200,200)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="140" y1="60" x2="140" y2="100" fill="none" stroke="rgb(200,200,200)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="180" y1="140" x2="140" y2="140" fill="none" stroke="rgb(200,200,200)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="140" y1="60" x2="100" y2="60" fill="none" stroke="rgb(200,200,200)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="100" y1="140" x2="60" y2="140" fill="none" stroke="rgb(200,200,200)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="100" y1="60" x2="60" y2="60" fill="none" stroke="rgb(200,200,200)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="60" y1="140" x2="60" y2="180" fill="none" stroke="rgb(200,200,200)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="140" y1="100" x2="140" y2="140" fill="none" stroke="rgb(200,200,200)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="140" y1="140" x2="140" y2="180" fill="none" stroke="rgb(200,200,200)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="60" y1="20" x2="60" y2="60" fill="none" stroke="rgb(200,200,200)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="60" y1="60" x2="60" y2="100" fill="none" stroke="rgb(200,200,200)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="140" y1="20" x2="140" y2="60" fill="none" stroke="rgb(200,200,200)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="60" y1="140" x2="20" y2="140" fill="none" stroke="rgb(200,200,200)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="140" y1="140" x2="100" y2="140" fill="none" stroke="rgb(200,200,200)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="180" y1="180" x2="140" y2="180" fill="none" stroke="rgb(0,0,0)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="180" y1="20" x2="180" y2="60" fill="none" stroke="rgb(0,0,0)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="20" y1="100" x2="20" y2="60" fill="none" stroke="rgb(0,0,0)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="20" y1="20" x2="60" y2="20" fill="none" stroke="rgb(0,0,0)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="100" y1="20" x2="140" y2="20" fill="none" stroke="rgb(0,0,0)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="100" y1="100" x2="60" y2="100" fill="none" stroke="rgb(0,0,0)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="140" y1="100" x2="100" y2="100" fill="none" stroke="rgb(0,0,0)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="100" y1="100" x2="100" y2="140" fill="none" stroke="rgb(0,0,0)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="60" y1="180" x2="20" y2="180" fill="none" stroke="rgb(0,0,0)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="100" y1="20" x2="100" y2="60" fill="none" stroke="rgb(0,0,0)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="180" y1="140" x2="180" y2="180" fill="none" stroke="rgb(0,0,0)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="20" y1="140" x2="20" y2="100" fill="none" stroke="rgb(0,0,0)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="180" y1="100" x2="140" y2="100" fill="none" stroke="rgb(0,0,0)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="100" y1="60" x2="100" y2="100" fill="none" stroke="rgb(0,0,0)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="180" y1="100" x2="180" y2="140" fill="none" stroke="rgb(0,0,0)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="60" y1="100" x2="20" y2="100" fill="none" stroke="rgb(0,0,0)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="180" y1="60" x2="180" y2="100" fill="none" stroke="rgb(0,0,0)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="140" y1="20" x2="180" y2="20" fill="none" stroke="rgb(0,0,0)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="60" y1="20" x2="100" y2="20" fill="none" stroke="rgb(0,0,0)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="20" y1="180" x2="20" y2="140" fill="none" stroke="rgb(0,0,0)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="100" y1="180" x2="60" y2="180" fill="none" stroke="rgb(0,0,0)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="140" y1="180" x2="100" y2="180" fill="none" stroke="rgb(0,0,0)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="20" y1="60" x2="20" y2="20" fill="none" stroke="rgb(0,0,0)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+	<line x1="100" y1="140" x2="100" y2="180" fill="none" stroke="rgb(0,0,0)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+</svg>
