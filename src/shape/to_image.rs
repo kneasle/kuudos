@@ -87,17 +87,21 @@ pub fn single_digit_per_cell<'a>(
     text_style: TextStyle,
     digits: &'a [Option<char>],
 ) -> impl FnMut(CellIdx, &[V2]) -> Vec<Elem> + 'a {
-    move |idx, verts| {
-        let cell_centre =
-            utils::centroid(verts.iter().copied()).expect("Can't have cell with no versions");
-        match digits[idx.to_idx()] {
-            Some(c) => vec![Elem::Text {
-                position: cell_centre,
-                text: c.to_string(),
-                angle: Rad(0.0),
-                style: text_style.clone(),
-            }],
-            None => vec![],
-        }
+    move |idx, verts| match digits[idx.to_idx()] {
+        Some(c) => char_in_cell_center(text_style.clone(), verts, c),
+        None => vec![],
     }
+}
+
+/// Generates the image [`Elem`]ents to place a single [`char`] in the center of a cell bounded by
+/// some vertices.
+pub fn char_in_cell_center(text_style: TextStyle, verts: &[V2], digit: char) -> Vec<Elem> {
+    let cell_centre =
+        utils::centroid(verts.iter().copied()).expect("Can't have cell with no versions");
+    vec![Elem::Text {
+        position: cell_centre,
+        text: digit.to_string(),
+        angle: Rad(0.0),
+        style: text_style,
+    }]
 }

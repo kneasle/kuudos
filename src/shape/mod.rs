@@ -12,6 +12,8 @@ use crate::{builder::Builder, V2Ext, V2};
 pub mod examples;
 mod to_image;
 
+pub use to_image::char_in_cell_center;
+
 /// The shape of a sudoku as accepted by Kuudos
 #[derive(Debug, Clone)]
 pub struct Shape {
@@ -47,6 +49,16 @@ impl Shape {
     /// Generate an SVG string of a puzzle which has this `Shape`
     pub fn svg_string(&self, opts: &RenderingOpts, scale: f32, clues: &[Option<char>]) -> String {
         self.image(clues).svg_string(scale, opts)
+    }
+
+    /// Generate an SVG string of a puzzle which has this `Shape`
+    pub fn svg_string_with_contents(
+        &self,
+        opts: &RenderingOpts,
+        scale: f32,
+        contents: impl FnMut(CellIdx, &[V2]) -> Vec<Elem>,
+    ) -> String {
+        to_image::gen_image(self, contents).svg_string(scale, opts)
     }
 
     pub fn image(&self, clues: &[Option<char>]) -> Image {

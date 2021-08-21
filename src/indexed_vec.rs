@@ -224,8 +224,8 @@ idx_impl!(BoxIdx, BoxVec); // Collection of boxes of cells
 idx_impl!(CellIdx, CellVec); // Collection of cells
 idx_impl!(EdgeIdx, EdgeVec); // Collection of edges between either boxes or cells
 idx_impl!(VertIdx, VertVec); // Collection of vertices of either boxes or cells (or both)
-idx_impl!(SymmIdx, SymmVec); // Collection of equivalence classes
-idx_impl!(LinkIdx, LinkVec); // Collection of links between edges
+idx_impl!(SymmIdx, SymmVec); // Collection of equivalence classes of anything
+idx_impl!(LinkIdx, LinkVec); // Collection of links between non-adjacent edges
 
 /// A common trait implemented by all custom index types
 pub trait IdxType {

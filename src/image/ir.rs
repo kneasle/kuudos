@@ -63,7 +63,7 @@ impl super::LoweredImage {
     }
 }
 
-/// The shape of an [`Elem`]
+/// A single 'element' of an [`Image`]
 #[derive(Debug, Clone)]
 pub enum Elem<F, S, T> {
     LineSegment(V2, V2, S),
