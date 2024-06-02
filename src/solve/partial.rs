@@ -5,12 +5,9 @@ use std::{
 
 use itertools::Itertools;
 
-use crate::{
-    indexed_vec::{CellIdx, CellVec, IdxType},
-    shape::Shape,
-};
+use crate::shape::{CellIdx, CellVec, Shape};
 
-use super::Error;
+use super::{Error, Grid, Solution};
 
 /// The state of a `Partial`ly solved sudoku grid
 #[derive(Debug, Clone)]
@@ -33,18 +30,14 @@ impl Partial {
         // `all_options` has `shape.num_symbols` 1s in its lowest bits, and 0s elsewhere
         let all_options = (1 << shape.num_symbols) - 1;
         Self {
-            penned_cells: CellVec::repeat(None, shape.num_cells()),
+            penned_cells: index_vec::index_vec![None; shape.num_cells()],
             num_unpenned_cells: shape.num_cells(),
-            pencil_masks: CellVec::repeat(all_options, shape.num_cells()),
+            pencil_masks: index_vec::index_vec![all_options; shape.num_cells()],
         }
     }
 
     /// Create a `Partial` with a given set of clues penned in.
-    pub fn from_clues(
-        table: &Table,
-        shape: &Shape,
-        clues: &[Option<usize>],
-    ) -> Result<Self, Error> {
+    pub fn from_clues(table: &Table, shape: &Shape, clues: &Grid) -> Result<Self, Error> {
         // Check that there are as many clues as cells in the `shape`
         if shape.num_cells() != clues.len() {
             return Err(Error::ClueLenMismatch {
@@ -56,7 +49,7 @@ impl Partial {
         let mut partial = Self::empty(shape);
         for (i, clue) in clues.iter().enumerate() {
             if let Some(digit) = clue {
-                partial.pen(table, CellIdx::from_idx(i), *digit);
+                partial.pen(table, CellIdx::new(i), *digit);
             }
         }
         Ok(partial)
@@ -68,7 +61,7 @@ impl Partial {
         let mut num_digits_penned = 0;
         loop {
             let mut has_naked_singles = false;
-            for (cell_idx, _cell) in table.affected_cells.indexed_iter() {
+            for (cell_idx, _cell) in table.affected_cells.iter_enumerated() {
                 // If this cell is a naked single then we pen its value
                 if let Some(only_digit) = self.naked_single_digit(cell_idx) {
                     has_naked_singles = true;
@@ -122,14 +115,14 @@ impl Partial {
     }
 
     /// Returns the digits in this `Partial`, returning `None` if the grid isn't solved.
-    pub fn into_solved_digits(self) -> Option<Vec<usize>> {
+    pub fn into_solved_digits(self) -> Option<Solution> {
         self.penned_cells.into_iter().collect()
     }
 
     /// Gets the [`CellIdx`] of a cell with a minimal number of pencilled digits.
     pub fn least_pencilled_cell(&self) -> CellIdx {
         self.pencil_masks
-            .indexed_iter()
+            .iter_enumerated()
             .min_by_key(|(_cell_idx, pencil_mask)| pencil_mask.count_ones())
             .map(|(cell_idx, _)| cell_idx)
             .expect("Grid has no cells")
@@ -184,7 +177,7 @@ pub(super) struct Table {
 impl Table {
     pub fn from_shape(shape: &Shape) -> Self {
         let mut affected_cells: CellVec<Vec<CellIdx>> =
-            CellVec::repeat(Vec::new(), shape.num_cells());
+            index_vec::index_vec![Vec::new(); shape.num_cells()];
         for group in &shape.groups {
             for &cell_idx in &group.cells {
                 affected_cells[cell_idx].extend(group.cells.iter().filter(|idx| **idx != cell_idx));

@@ -1,8 +1,7 @@
-use itertools::Itertools;
 use kuudos::{
     image::RenderingOpts,
     puzzle_gen::{self, PuzzleGen},
-    shape::{examples, Shape},
+    shape::{examples, CellVec, Shape},
     solve::{
         clues_from_str,
         naive::{self, Naive},
@@ -58,20 +57,20 @@ fn main() {
     let clue_vec = clues
         .iter()
         .map(|x| x.map(|v| VALUE_NAMES.chars().nth(v).unwrap()))
-        .collect_vec();
+        .collect::<CellVec<_>>();
     let soln_vec = soln
         .iter()
         .map(|digit| VALUE_NAMES.chars().nth(*digit).unwrap())
         .map(Some)
-        .collect_vec();
+        .collect::<CellVec<_>>();
     let cell_name_vec = VALUE_NAMES
         .chars()
         .cycle()
         .take(shape.num_cells())
         .map(Some)
-        .collect_vec();
+        .collect::<CellVec<_>>();
     // Generate all the files
-    let write_svg_str = |clues: Vec<Option<char>>, path: &str| {
+    let write_svg_str = |clues: CellVec<Option<char>>, path: &str| {
         let svg_str = shape.svg_string(&RenderingOpts::default(), 40.0, &clues);
         std::fs::write(path, svg_str).unwrap();
     };

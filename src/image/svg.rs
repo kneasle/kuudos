@@ -100,7 +100,7 @@ fn gen_svg_elem(elem: &LoweredElem, translation: V2, scale: f32) -> XMLElement {
             let mut elem = XMLElement::new("text");
             elem.add_attribute("transform", &transform_str);
             elem.add_attribute("font-size", &(font_size * scale).to_string());
-            elem.add_attribute("font-family", &font_family);
+            elem.add_attribute("font-family", font_family);
             elem.add_attribute("text-anchor", anchor_str);
             elem.add_text(text);
             elem

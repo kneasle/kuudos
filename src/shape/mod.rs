@@ -5,7 +5,6 @@ use angle::Angle;
 use itertools::Itertools;
 
 use crate::image::{Elem, Image, RenderingOpts};
-use crate::indexed_vec::{CellIdx, CellVec, IdxType, VertIdx, VertVec};
 use crate::utils::Rect2;
 use crate::{builder::Builder, V2Ext, V2};
 
@@ -43,11 +42,20 @@ impl Shape {
 
     /// Write an empty sudoku grid to an SVG string
     pub fn svg_string_empty(&self, opts: &RenderingOpts, scaling: f32) -> String {
-        self.svg_string(opts, scaling, &vec![None; self.num_cells()])
+        self.svg_string(
+            opts,
+            scaling,
+            &index_vec::index_vec![None; self.num_cells()],
+        )
     }
 
     /// Generate an SVG string of a puzzle which has this `Shape`
-    pub fn svg_string(&self, opts: &RenderingOpts, scale: f32, clues: &[Option<char>]) -> String {
+    pub fn svg_string(
+        &self,
+        opts: &RenderingOpts,
+        scale: f32,
+        clues: &CellVec<Option<char>>,
+    ) -> String {
         self.image(clues).svg_string(scale, opts)
     }
 
@@ -61,7 +69,7 @@ impl Shape {
         to_image::gen_image(self, contents).svg_string(scale, opts)
     }
 
-    pub fn image(&self, clues: &[Option<char>]) -> Image {
+    pub fn image(&self, clues: &CellVec<Option<char>>) -> Image {
         to_image::gen_image_with_clues(self, clues)
     }
 
@@ -94,7 +102,7 @@ impl Shape {
         // This allows the 2nd adjacent cell to figure out which edges it joins together
         let mut edges = HashMap::<(VertIdx, VertIdx), Edge>::new();
 
-        for (cell_idx, verts) in self.cells.indexed_iter() {
+        for (cell_idx, verts) in self.cells.iter_enumerated() {
             // Iterate over the edges of this cell in clockwise order (i.e. with this cell on the
             // **right** side of each edge).
             for (&vert_idx_bottom, &vert_idx_top) in verts.iter().circular_tuple_windows() {
@@ -121,7 +129,7 @@ impl Shape {
             }
         }
 
-        edges.into_iter().map(|(_k, v)| v).collect_vec()
+        edges.into_values().collect_vec()
     }
 
     /// Returns the bounding box of this `Shape` as a (min, max) pair of vectors
@@ -162,7 +170,7 @@ impl Shape {
          * Vertices are also labelled using this system.  However, there is a `box_width + 1` by
          * `box_height + 1` grid of vertices, so the resulting indices are different. */
         let grid_width = box_height * box_width;
-        let cell_idx = |row: usize, col: usize| CellIdx::from_idx((row * grid_width) + col);
+        let cell_idx = |row: usize, col: usize| CellIdx::new((row * grid_width) + col);
 
         /* GENERATE GROUPS */
 
@@ -209,7 +217,7 @@ impl Shape {
         }
 
         // Generate which vertices go round each cell
-        let vert_idx = |x: usize, y: usize| VertIdx::from_idx(y * (grid_width + 1) + x);
+        let vert_idx = |x: usize, y: usize| VertIdx::new(y * (grid_width + 1) + x);
         let mut cell_verts = CellVec::<Vec<VertIdx>>::with_capacity(grid_width * grid_width);
         for row in 0..grid_width {
             for col in 0..grid_width {
@@ -301,7 +309,7 @@ impl Symmetry {
     pub fn asymmetric(shape: &Shape) -> Self {
         Self {
             cell_equiv_classes: (0..shape.num_cells())
-                .map(|idx| vec![CellIdx::from_idx(idx)])
+                .map(|idx| vec![CellIdx::new(idx)])
                 .collect_vec(),
         }
     }
@@ -316,15 +324,12 @@ impl Symmetry {
         for (idx, v) in cell_assignments.enumerate() {
             cells_per_assignment
                 .entry(v)
-                .or_insert_with(Vec::new)
-                .push(CellIdx::from_idx(idx));
+                .or_default()
+                .push(CellIdx::new(idx));
         }
         // Sort the equivalence classes by their minimum cell, thus making sure their order is
         // deterministic
-        let mut cell_equiv_classes = cells_per_assignment
-            .into_iter()
-            .map(|(_k, v)| v)
-            .collect_vec();
+        let mut cell_equiv_classes = cells_per_assignment.into_values().collect_vec();
         for class in &mut cell_equiv_classes {
             class.sort(); // Sort the cell indices in each equiv class
         }
@@ -338,3 +343,8 @@ impl Symmetry {
         &self.cell_equiv_classes
     }
 }
+
+index_vec::define_index_type! { pub struct VertIdx = usize; }
+index_vec::define_index_type! { pub struct CellIdx = usize; }
+pub type VertVec<T> = index_vec::IndexVec<VertIdx, T>;
+pub type CellVec<T> = index_vec::IndexVec<CellIdx, T>;

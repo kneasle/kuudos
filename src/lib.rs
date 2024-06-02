@@ -1,6 +1,5 @@
 pub mod builder;
 pub mod image;
-pub mod indexed_vec;
 pub mod puzzle_gen;
 pub mod shape;
 pub mod solve;

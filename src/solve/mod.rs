@@ -1,18 +1,17 @@
 use std::fmt::{Display, Formatter};
 
-use itertools::Itertools;
 use rand::Rng;
 
-use crate::Shape;
+use crate::{shape::CellVec, Shape};
 
 pub mod naive;
 mod partial;
 pub mod random;
 
 /// Type alias for a partially filled sudoku grid
-pub type Grid = Vec<Option<usize>>;
+pub type Grid = CellVec<Option<usize>>;
 /// Type alias for a fully filled (i.e. solved) sudoku grid
-pub type Solution = Vec<usize>;
+pub type Solution = CellVec<usize>;
 
 /// Trait implemented by all solving algorithms
 pub trait Solver<'s> {
@@ -27,20 +26,20 @@ pub trait Solver<'s> {
 /// Trait implemented by all solvers which can check for single solutions
 pub trait SingleSolnSolver<'s>: Solver<'s> {
     /// Find a single solution for a puzzle, without checking for the existence of other solutions.
-    fn solve_single_soln(&self, clues: &[Option<usize>]) -> Result<Solution, Error>;
+    fn solve_single_soln(&self, clues: &Grid) -> Result<Solution, Error>;
 }
 
 /// Trait implemented by all solving algorithms which check for multiple solutions
 pub trait MultipleSolnSolver<'s>: Solver<'s> {
     /// Solve a puzzle, checking for multiple solutions
-    fn solve(&self, clues: &[Option<usize>]) -> Result<Solution, Error>;
+    fn solve(&self, clues: &Grid) -> Result<Solution, Error>;
 }
 
 /// Trait implemented by all solving algorithms which check for multiple solutions and difficulty
 /// of the solution
 pub trait WithDifficulty<'s>: Solver<'s> {
     /// Solve a puzzle, checking for multiple solutions
-    fn solve_with_difficulty(&self, clues: &[Option<usize>]) -> Result<(Solution, f32), Error>;
+    fn solve_with_difficulty(&self, clues: &Grid) -> Result<(Solution, f32), Error>;
 }
 
 /// Trait implemented by all solving algorithms which check for multiple solutions and difficulty
@@ -49,7 +48,7 @@ pub trait RandomSolver<'s>: Solver<'s> {
     /// Solve a puzzle for one solution, filling the cells randomly.  This is only really used for
     /// populating puzzle grids; for solving puzzles, randomness has no benefit and only slows the
     /// solver down.
-    fn solve_random(&self, clues: &[Option<usize>], rng: &mut impl Rng) -> Result<Solution, Error>;
+    fn solve_random(&self, clues: &Grid, rng: &mut impl Rng) -> Result<Solution, Error>;
 }
 
 /// Generates a clue list from a string (where `'.'` or `'0'` represent an empty cell and
@@ -63,7 +62,7 @@ pub fn clues_from_str(s: &str) -> Grid {
             'a'..='z' => Some(Some(c as usize - 'a' as usize + 9)),
             _ => None,
         })
-        .collect_vec()
+        .collect()
 }
 
 /// The possible ways that a sudoku solve can fail

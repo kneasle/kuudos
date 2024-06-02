@@ -6,6 +6,7 @@ edition = "2018"
 [dependencies]
 angle = "0.4"
 itertools = "0.10"
+index_vec = "0.1.3"
 num-complex = "0.4"
 rand = "0.8"
 rand_chacha = "0.3"

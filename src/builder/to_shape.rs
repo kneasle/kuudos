@@ -2,16 +2,19 @@
 
 use std::collections::{HashMap, HashSet};
 
+use index_vec::index_vec;
 use itertools::Itertools;
 
 use crate::{
     image::{Elem, StrokeStyle, Style},
-    indexed_vec::{BoxIdx, CellIdx, CellVec, EdgeIdx, EdgeVec, IdxType, LinkIdx, VertIdx, VertVec},
-    shape::Group,
+    shape::{CellIdx, CellVec, Group},
     Shape, Symmetry, V2,
 };
 
-use super::{Builder, Direction, EdgeLinkStyle, LinkSide, RotateDirection, Side};
+use super::{
+    BoxIdx, Builder, Direction, EdgeLinkStyle, LinkIdx, LinkSide, RotateDirection, Side, VertIdx,
+    VertVec,
+};
 
 /// Converts a `Builder` into a [`Shape`] and the associated [`Symmetry`]
 pub fn gen_shape(mut bdr: Builder) -> Result<(Shape, Symmetry), BuildError> {
@@ -212,7 +215,7 @@ fn generate_edges(bdr: &Builder) -> Result<(EdgeVec<Edge>, BoxEdgeMap, LinkEdgeM
     // break the contract of `Edge` (which must have a specific length), so in these cases we
     // create a `LengthlessEdge`.  Once we know the length of the `LengthlessEdge`, it is converted
     // to a full `Edge` and stored.
-    for (link_idx, link) in bdr.edge_links.indexed_iter() {
+    for (link_idx, link) in bdr.edge_links.iter_enumerated() {
         // These are labelled (bottom_vert, top_vert, side of link), so that this link is always on
         // the right-hand side of the edge
         let sides = [
@@ -397,7 +400,7 @@ fn generate_extra_elements(
     let mut extra_elems = Vec::new();
 
     // Closure which returns the extra links required to draw a single `EdgeLink`
-    for (link_idx, link) in bdr.edge_links.indexed_iter() {
+    for (link_idx, link) in bdr.edge_links.iter_enumerated() {
         // Cheeky closure to get the length of one side of the link
         let get_edge_len = |side: LinkSide| {
             let (edge_idx, _) = link_edge_map[&(link_idx, side)];
@@ -529,7 +532,7 @@ fn generate_symmetry(
      * multiple equivalence classes into one.  We implement this by making high-indexed classes
      * dominate lower-indexed ones, and having all classes dominate `None` (this is how `Ord` is
      * implemented for `Option<T>`). */
-    let mut equiv_class_by_cell: Vec<Option<usize>> = vec![None; num_cells];
+    let mut equiv_class_by_cell: CellVec<Option<usize>> = index_vec![None; num_cells];
     let mut next_equiv_class_idx = 0;
     for box_idxs in bdr.box_equiv_classes.iter() {
         // Iterate over the cell coords **first**, because cells at the same location in different
@@ -551,9 +554,9 @@ fn generate_symmetry(
                         x: transformed_x,
                         y: transformed_y,
                     };
-                    let cell_idx = cell_idx_by_coord.get(&cell_coord).unwrap();
+                    let cell_idx = *cell_idx_by_coord.get(&cell_coord).unwrap();
                     // Note that this cell belongs to this equiv_class
-                    let equiv_class = &mut equiv_class_by_cell[cell_idx.to_idx()];
+                    let equiv_class = &mut equiv_class_by_cell[cell_idx];
                     *equiv_class = (*equiv_class).max(Some(equiv_class_idx));
                 }
             }
@@ -785,3 +788,6 @@ impl EdgeSide {
         }
     }
 }
+
+index_vec::define_index_type! { pub struct EdgeIdx = usize; }
+pub type EdgeVec<T> = index_vec::IndexVec<EdgeIdx, T>;

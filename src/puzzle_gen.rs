@@ -1,9 +1,9 @@
-use itertools::Itertools;
+use index_vec::index_vec;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 
 use crate::{
-    indexed_vec::{CellIdx, IdxType},
+    shape::{CellIdx, CellVec},
     solve::{Grid, MultipleSolnSolver, RandomSolver, Solution},
     Shape, Symmetry,
 };
@@ -48,7 +48,7 @@ impl<'shp, 'symm, F: RandomSolver<'shp>, S: MultipleSolnSolver<'shp>> PuzzleGen<
 
     /// Generate a grid, returning `None` if the solvers always failed
     pub fn generate_with_rng(&self, rng: &mut impl Rng) -> Option<(Grid, Solution)> {
-        let empty_grid: Grid = vec![None; self.shape.num_cells()];
+        let empty_grid: Grid = index_vec![None; self.shape.num_cells()];
         let mut best_puzzle: Option<(usize, Grid, Solution)> = None;
         // Repeatedly fill the empty grid
         for _ in 0..self.config.num_grids {
@@ -62,7 +62,7 @@ impl<'shp, 'symm, F: RandomSolver<'shp>, S: MultipleSolnSolver<'shp>> PuzzleGen<
     /// Remove clues from the grid to generate a puzzle
     fn gen_puzzles_from_grid(
         &self,
-        filled_grid: &[usize],
+        filled_grid: &Solution,
         rng: &mut impl Rng,
         best_puzzle: &mut Option<(usize, Grid, Solution)>,
     ) {
@@ -72,7 +72,7 @@ impl<'shp, 'symm, F: RandomSolver<'shp>, S: MultipleSolnSolver<'shp>> PuzzleGen<
             ecs.shuffle(rng);
             ecs
         };
-        let mut clues = filled_grid.iter().copied().map(Some).collect_vec(); // Start with a full grid
+        let mut clues: CellVec<Option<usize>> = filled_grid.iter().copied().map(Some).collect(); // Start with a full grid
         let mut num_solver_runs = 0; // Accumulator to track how many times the solver has been run
 
         // Recursively remove clues, updating `best_puzzle` with the best puzzle found so far
@@ -90,9 +90,9 @@ impl<'shp, 'symm, F: RandomSolver<'shp>, S: MultipleSolnSolver<'shp>> PuzzleGen<
     /// some amount of backtracking to search for other solutions
     fn recursive_remove_clues(
         &self,
-        filled_grid: &[usize],
+        filled_grid: &Solution,
         equiv_classes: &[Vec<CellIdx>],
-        clues: &mut [Option<usize>],
+        clues: &mut CellVec<Option<usize>>,
         num_solver_runs: &mut usize,
         best_puzzle: &mut Option<(usize, Grid, Solution)>,
         depth: usize,
@@ -108,7 +108,7 @@ impl<'shp, 'symm, F: RandomSolver<'shp>, S: MultipleSolnSolver<'shp>> PuzzleGen<
         }
         // Remove the clues contained in the `depth`th equivalence class
         for cell_idx in &equiv_classes[depth] {
-            clues[cell_idx.to_idx()] = None;
+            clues[*cell_idx] = None;
         }
         // Test whether or not the grid is soluble
         *num_solver_runs += 1;
@@ -141,8 +141,8 @@ impl<'shp, 'symm, F: RandomSolver<'shp>, S: MultipleSolnSolver<'shp>> PuzzleGen<
             );
         }
         // Re-add the clues we removed
-        for cell_idx in &equiv_classes[depth] {
-            clues[cell_idx.to_idx()] = Some(filled_grid[cell_idx.to_idx()]);
+        for &cell_idx in &equiv_classes[depth] {
+            clues[cell_idx] = Some(filled_grid[cell_idx]);
         }
         // Now that we've added these cells back, we try to remove the next equivalence class
         self.recursive_remove_clues(

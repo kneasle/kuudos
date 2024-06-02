@@ -1,15 +1,14 @@
 use angle::Rad;
 use itertools::Itertools;
 
-use super::Shape;
+use super::{CellIdx, CellVec, Shape};
 use crate::{
     image::{Elem, FillStyle, Image, StrokeStyle, Style, TextStyle},
-    indexed_vec::{CellIdx, IdxType},
     utils, V2,
 };
 
 /// Write a populated sudoku grid to an SVG string
-pub fn gen_image_with_clues(shape: &Shape, clues: &[Option<char>]) -> Image {
+pub fn gen_image_with_clues(shape: &Shape, clues: &CellVec<Option<char>>) -> Image {
     gen_image(shape, single_digit_per_cell(TextStyle::Clue, clues))
 }
 
@@ -32,7 +31,7 @@ pub fn gen_image(
     }
 
     // Add the cell contents
-    for (cell_idx, vert_idxs) in shape.cells.indexed_iter() {
+    for (cell_idx, vert_idxs) in shape.cells.iter_enumerated() {
         let verts = vert_idxs.iter().map(|idx| shape.verts[*idx]).collect_vec();
         image.add_iter(get_cell_contents(cell_idx, &verts));
     }
@@ -83,11 +82,11 @@ pub fn gen_image(
 ///////////////////////////////////////////
 
 /// Returns a closure that generates a places a single 'penned' digit in the middle of each cell.
-pub fn single_digit_per_cell<'a>(
+pub fn single_digit_per_cell(
     text_style: TextStyle,
-    digits: &'a [Option<char>],
-) -> impl FnMut(CellIdx, &[V2]) -> Vec<Elem> + 'a {
-    move |idx, verts| match digits[idx.to_idx()] {
+    digits: &CellVec<Option<char>>,
+) -> impl FnMut(CellIdx, &[V2]) -> Vec<Elem> + '_ {
+    move |idx, verts| match digits[idx] {
         Some(c) => char_in_cell_center(text_style.clone(), verts, c),
         None => vec![],
     }

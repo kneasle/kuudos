@@ -6,7 +6,7 @@ use crate::Shape;
 use super::{
     naive::Config,
     partial::{Partial, Table},
-    Error, RandomSolver, Solution, Solver,
+    Error, Grid, RandomSolver, Solution, Solver,
 };
 
 /// A [`Solver`] similar to [`Naive`] that chooses new digits randomly, thus generating a random
@@ -77,7 +77,7 @@ impl<'s> Solver<'s> for NaiveRandom<'s> {
 }
 
 impl<'s> RandomSolver<'s> for NaiveRandom<'s> {
-    fn solve_random(&self, clues: &[Option<usize>], rng: &mut impl Rng) -> Result<Solution, Error> {
+    fn solve_random(&self, clues: &Grid, rng: &mut impl Rng) -> Result<Solution, Error> {
         // Create a partial solution where only the given clues are penned
         let unsolved_partial = Partial::from_clues(&self.table, self.shape, clues)?;
         // Run recursive backtracking on this grid, and extract the solution or propagate the error

@@ -2,7 +2,7 @@ use crate::Shape;
 
 use super::{
     partial::{Partial, Table},
-    Error, MultipleSolnSolver, SingleSolnSolver, Solver, WithDifficulty,
+    Error, Grid, MultipleSolnSolver, SingleSolnSolver, Solution, Solver, WithDifficulty,
 };
 
 /// A pretty naive solver, using only 'naked singles' and backtracking as well as relying on
@@ -19,11 +19,7 @@ pub struct Naive<'s> {
 
 impl<'s> Naive<'s> {
     /// Generic solve function that all the trait methods delegate to
-    fn solve_(
-        &self,
-        clues: &[Option<usize>],
-        check_multiple_solns: bool,
-    ) -> Result<(Vec<usize>, f32), Error> {
+    fn solve_(&self, clues: &Grid, check_multiple_solns: bool) -> Result<(Solution, f32), Error> {
         let mut num_digits_penned = 0; // We use number of cells filled as our metric for
                                        // difficulty
 
@@ -134,21 +130,21 @@ impl<'s> Solver<'s> for Naive<'s> {
 }
 
 impl<'s> SingleSolnSolver<'s> for Naive<'s> {
-    fn solve_single_soln(&self, clues: &[Option<usize>]) -> Result<Vec<usize>, Error> {
+    fn solve_single_soln(&self, clues: &Grid) -> Result<Solution, Error> {
         self.solve_(clues, false) // Delegate to the generic solver
             .map(|(soln, _difficulty)| soln) // Discard the difficulty
     }
 }
 
 impl<'s> MultipleSolnSolver<'s> for Naive<'s> {
-    fn solve(&self, clues: &[Option<usize>]) -> Result<Vec<usize>, Error> {
+    fn solve(&self, clues: &Grid) -> Result<Solution, Error> {
         self.solve_(clues, true) // Delegate to the generic solver
             .map(|(soln, _difficulty)| soln) // Discard the difficulty
     }
 }
 
 impl<'s> WithDifficulty<'s> for Naive<'s> {
-    fn solve_with_difficulty(&self, clues: &[Option<usize>]) -> Result<(Vec<usize>, f32), Error> {
+    fn solve_with_difficulty(&self, clues: &Grid) -> Result<(Solution, f32), Error> {
         self.solve_(clues, true) // Delegate to the generic solver
     }
 }

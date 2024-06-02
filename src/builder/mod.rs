@@ -1,7 +1,7 @@
 use std::{fmt::Debug, ops::Not};
 
 use crate::{
-    indexed_vec::{BoxIdx, BoxVec, LinkIdx, LinkVec, SymmIdx, SymmVec, VertIdx, VertVec},
+    shape::{VertIdx, VertVec},
     utils, Shape, Symmetry, V2Ext, V2,
 };
 
@@ -422,7 +422,7 @@ impl Builder {
     /// Return an iterator over the [`SourceBox`]es, and their indices
     fn source_boxes(&self) -> impl Iterator<Item = (BoxIdx, &SourceBox)> {
         self.boxes
-            .indexed_iter()
+            .iter_enumerated()
             .filter_map(|(idx, box_)| match box_ {
                 Box_::Source(s) => Some((idx, s)),
                 Box_::Ref { .. } => None,
@@ -432,7 +432,7 @@ impl Builder {
     /// Return an iterator over the [`SourceBox`]es, and their indices
     fn source_boxes_mut(&mut self) -> impl Iterator<Item = (BoxIdx, &mut SourceBox)> {
         self.boxes
-            .indexed_iter_mut()
+            .iter_mut_enumerated()
             .filter_map(|(idx, box_)| match box_ {
                 Box_::Source(s) => Some((idx, s)),
                 Box_::Ref { .. } => None,
@@ -454,7 +454,7 @@ impl Builder {
     fn get_vert_at(&mut self, new_pos: V2) -> VertIdx {
         let existing_vert_idx = self
             .verts
-            .idx_of_first(|vert| (*vert - new_pos).length() < 0.0001);
+            .position(|vert| (*vert - new_pos).length() < 0.0001);
         // Add a new vertex if there isn't one already at this position
         existing_vert_idx.unwrap_or_else(|| self.verts.push(new_pos))
     }
@@ -959,3 +959,10 @@ impl Default for EdgeTransform {
         Self::identity()
     }
 }
+
+index_vec::define_index_type! { pub struct BoxIdx = usize; }
+index_vec::define_index_type! { pub struct LinkIdx = usize; }
+index_vec::define_index_type! { pub struct SymmIdx = usize; }
+pub type BoxVec<T> = index_vec::IndexVec<BoxIdx, T>;
+pub type LinkVec<T> = index_vec::IndexVec<LinkIdx, T>;
+pub type SymmVec<T> = index_vec::IndexVec<SymmIdx, T>;
