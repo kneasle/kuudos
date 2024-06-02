@@ -15,7 +15,6 @@ use super::{
 #[derive(Debug, Clone)]
 pub struct NaiveRandom<'s> {
     shape: &'s Shape,
-    config: Config,
     table: Table,
 }
 
@@ -69,10 +68,9 @@ impl<'s> NaiveRandom<'s> {
 impl<'s> Solver<'s> for NaiveRandom<'s> {
     type Config = Config;
 
-    fn new(shape: &'s Shape, config: Config) -> Self {
+    fn new(shape: &'s Shape, _config: Config) -> Self {
         Self {
             shape,
-            config,
             table: Table::from_shape(shape),
         }
     }
